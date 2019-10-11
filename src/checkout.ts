@@ -97,13 +97,36 @@ let clean = true;
 if ((core.getInput('clean') || '').toUpperCase() == 'FALSE') {
     clean = false;
 }
+core.debug(`clean = ${clean}`);
 
 // Submodules
 let submodules = core.getInput('submodules');
 
 // Fetch depth
-// todo
+let fetchDepth = Math.floor(Number(core.getInput('fetch-depth')));
+if (isNaN(fetchDepth) || fetchDepth < 0) {
+    fetchDepth = 0;
+}
+core.debug(`fetch depth = ${fetchDepth}`);
 
+// LFS
+let lfs = false;
+if ((core.getInput('lfs') || '').toUpperCase() == 'TRUE') {
+    lfs = true;
+}
+core.debug(`lfs = ${lfs}`);
+
+// Access token
+let accessToken = core.getInput('token');
+
+try {
+    // todo: Register problem matcher
+
+    // todo: Get sources
+}
+finally {
+    // todo: Unregister problem matcher
+}
 /**
             bool clean = StringUtil.ConvertToBoolean(executionContext.GetInput(Pipelines.PipelineConstants.CheckoutTaskInputs.Clean), true);
             string submoduleInput = executionContext.GetInput(Pipelines.PipelineConstants.CheckoutTaskInputs.Submodules);
