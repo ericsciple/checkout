@@ -9,7 +9,11 @@ import { context } from '@actions/github';
 
 export interface IGitCommandManager {
     setWorkingDirectory(path: string);
+    tryClean(): Promise<number>;
     tryGetFetchUrl(): Promise<string>;
+    tryReset(): Promise<number>;
+    trySubmoduleClean(): Promise<number>;
+    trySubmoduleReset(): Promise<number>;
 }
 
 export async function CreateCommandManager(workingDirectory: string, lfs: boolean): Promise<IGitCommandManager> {
@@ -24,24 +28,15 @@ class GitCommandManager {
         "GIT_TERMINAL_PROMPT": "0", // Disable git prompt
         "GCM_INTERACTIVE": "Never"  // Disable prompting for git credential manager
     };
-    // private gitLfsPath: string = '';
-    // private gitLfsVersion: Version = new Version();
     private gitPath: string = '';
-    // private gitVersion: Version = new Version();
     private lfs: boolean = false;
     private workingDirectory: string = '';
 
-    constructor(workingDirectory: string, lfs: boolean) {
-        this.setWorkingDirectory(workingDirectory);
-
-        // Git-lfs will try to pull down assets if any of the local/user/system setting exist.
-        // If the user didn't enable `LFS` in their pipeline definition, disable LFS fetch/checkout.
-        this.lfs = lfs;
-        if (!this.lfs) {
-            this.gitEnv["GIT_LFS_SKIP_SMUDGE"] = "1";
-        }
+    // Private constructor, use createCommandManager()
+    private constructor() {
     }
 
+    // Set the working directory
     public setWorkingDirectory(path: string) {
         fshelper.directoryExistsSync(path, true);
         this.workingDirectory = path;
@@ -49,7 +44,7 @@ class GitCommandManager {
 
     // git config --get remote.origin.url
     public async tryGetFetchUrl(): Promise<string> {
-        let output = await this.execGit(['config', '--get', 'remote.origin.url']);
+        let output = await this.execGit(['config', '--get', 'remote.origin.url'], true);
 
         if (output.exitCode != 0) {
             return '';
@@ -63,7 +58,55 @@ class GitCommandManager {
         return stdout;
     }
 
-    public async initializeCommandManager() {
+    public static async createCommandManager(
+        workingDirectory: string,
+        lfs: boolean):
+        Promise<GitCommandManager> {
+
+        let result = new GitCommandManager();
+        await result.initialize(workingDirectory, lfs);
+        return result;
+    }
+
+    private async execGit(
+        args: string[],
+        ignoreReturnCode: boolean = false):
+        Promise<GitOutput> {
+
+        let result = new GitOutput();
+
+        let env = {};
+        Object.keys(process.env).forEach(x => env[x] = process.env[x]);
+        Object.keys(this.gitEnv).forEach(x => env[x] = this.gitEnv[x]);
+
+        let options = {
+            cwd: this.workingDirectory,
+            env: env,
+            ignoreReturnCode: ignoreReturnCode,
+            listeners: {
+                stdout: (data: Buffer) => {
+                    result.stdout += data.toString();
+                }
+            }
+        };
+
+        result.exitCode = await exec.exec(this.gitPath, args, options);
+        return result;
+    }
+
+    private async initialize(
+        workingDirectory: string,
+        lfs: boolean) {
+
+        this.setWorkingDirectory(workingDirectory);
+
+        // Git-lfs will try to pull down assets if any of the local/user/system setting exist.
+        // If the user didn't enable `LFS` in their pipeline definition, disable LFS fetch/checkout.
+        this.lfs = lfs;
+        if (!this.lfs) {
+            this.gitEnv["GIT_LFS_SKIP_SMUDGE"] = "1";
+        }
+
         this.gitPath = await io.which('git', true);
 
         // Git version
@@ -115,32 +158,6 @@ class GitCommandManager {
         let gitHttpUserAgent = `git/${gitVersion} (github-actions-checkout)`;
         core.debug(`Set git useragent to: ${gitHttpUserAgent}`);
         this.gitEnv["GIT_HTTP_USER_AGENT"] = gitHttpUserAgent;
-    }
-
-    private async execGit(
-        args: string[],
-        ignoreReturnCode: boolean = false):
-        Promise<GitOutput> {
-
-        let result = new GitOutput();
-
-        let env = {};
-        Object.keys(process.env).forEach(x => env[x] = process.env[x]);
-        Object.keys(this.gitEnv).forEach(x => env[x] = this.gitEnv[x]);
-
-        let options = {
-            cwd: this.workingDirectory,
-            env: env,
-            ignoreReturnCode: ignoreReturnCode,
-            listeners: {
-                stdout: (data: Buffer) => {
-                    result.stdout += data.toString();
-                }
-            }
-        };
-
-        result.exitCode = await exec.exec(this.gitPath, args, options);
-        return result;
     }
 }
 

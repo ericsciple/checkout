@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import * as fsHelper from './fs-helper';
 import * as gitCommandManager from './git-command-manager';
+import * as io from '@actions/io';
 import * as path from 'path';
 
 /*
@@ -75,79 +76,38 @@ export async function getSource(
 
     let git = await gitCommandManager.CreateCommandManager(runnerWorkspacePath, lfs);
 
-    await isExpectedRemoteUrl()
-};
+    git.setWorkingDirectory(repositoryPath);
 
-async function isExpectedRemoteUrl(git: gitCommandManager.IGitCommandManager, repositoryPath: string, repositoryUrl: string): Promise<boolean> {
-    core.debug(`Checking if the repository at '${repositoryPath}' has remote URL '${repositoryUrl}'`);
-    let dotGitPath = path.join(repositoryPath, '.git');
-    if (!fsHelper.directoryExistsSync(dotGitPath)) {
-        core.debug(`Directory not found: '${dotGitPath}'`);
-        return false;
+    if (fsHelper.directoryExistsSync(path.join(repositoryPath, '.git')) &&
+        repositoryUrl == await git.tryGetFetchUrl()) {
+
+        // Delete any index.lock and shallow.lock left by a previously canceled run or crashed git process
+        let lockPaths = [
+            path.join(repositoryPath, '.git', 'index.lock'),
+            path.join(repositoryPath, '.git', 'shallow.lock')
+        ];
+        for (let i = 0; i < lockPaths.length; i++) {
+            let lockPath = lockPaths[i];
+            try {
+                await io.rmRF(lockPath);
+            }
+            catch (error) {
+                core.debug(`Unable to delete '${lockPath}'. ${error.message}`);
+            }
+        }
+
+        // Clean
+    }
+    else {
+        await io.rmRF(repositoryPath);
     }
 
-    git.setWorkingDirectory(repositoryPath);
-    let remoteUrl = await git.tryGetFetchUrl();
-    return remoteUrl == repositoryUrl;
-}
+    io.mkdirP(repositoryPath);
+};
 
+// 
 
-
-
-
-
-// Make sure the build machine met all requirements for the git repository
-// For now, the requirement we have are:
-// 1. git version greater than 2.9 since we need to use auth header.
-// 2. git-lfs version greater than 2.1 since we need to use auth header.
-// 3. git version greater than 2.14.2 if use SChannel for SSL backend (Windows only)
-// RequirementCheck(executionContext, gitCommandManager, gitLfsSupport);
-
-
-// module.exports = { getSource: getSource };
 /*
-
-
-            // Check the current contents of the root folder to see if there is already a repo
-            // If there is a repo, see if it matches the one we are expecting to be there based on the remote fetch url
-            // if the repo is not what we expect, remove the folder
-            if (!await IsRepositoryOriginUrlMatch(executionContext, gitCommandManager, targetPath, repositoryUrl))
-            {
-                // Delete source folder
-                IOUtil.DeleteDirectory(targetPath, cancellationToken);
-            }
-            else
-            {
-                // delete the index.lock file left by previous canceled build or any operation cause git.exe crash last time.
-                string lockFile = Path.Combine(targetPath, ".git\\index.lock");
-                if (File.Exists(lockFile))
-                {
-                    try
-                    {
-                        File.Delete(lockFile);
-                    }
-                    catch (Exception ex)
-                    {
-                        executionContext.Debug($"Unable to delete the index.lock file: {lockFile}");
-                        executionContext.Debug(ex.ToString());
-                    }
-                }
-
-                // delete the shallow.lock file left by previous canceled build or any operation cause git.exe crash last time.		
-                string shallowLockFile = Path.Combine(targetPath, ".git\\shallow.lock");
-                if (File.Exists(shallowLockFile))
-                {
-                    try
-                    {
-                        File.Delete(shallowLockFile);
-                    }
-                    catch (Exception ex)
-                    {
-                        executionContext.Debug($"Unable to delete the shallow.lock file: {shallowLockFile}");
-                        executionContext.Debug(ex.ToString());
-                    }
-                }
-
                 // When repo.clean is selected for a git repo, execute git clean -ffdx and git reset --hard HEAD on the current repo.
                 // This will help us save the time to reclone the entire repo.
                 // If any git commands exit with non-zero return code or any exception happened during git.exe invoke, fall back to delete the repo folder.
@@ -631,3 +591,22 @@ async function isExpectedRemoteUrl(git: gitCommandManager.IGitCommandManager, re
     }
 }
 */
+
+
+// async function isExpectedRemoteUrl(
+//     git: gitCommandManager.IGitCommandManager,
+//     repositoryPath: string,
+//     repositoryUrl: string):
+//     Promise<boolean> {
+
+//     core.debug(`Checking if the repository at '${repositoryPath}' has remote URL '${repositoryUrl}'`);
+//     let dotGitPath = path.join(repositoryPath, '.git');
+//     if (!fsHelper.directoryExistsSync(dotGitPath)) {
+//         core.debug(`Directory not found: '${dotGitPath}'`);
+//         return false;
+//     }
+
+//     git.setWorkingDirectory(repositoryPath);
+//     let remoteUrl = await git.tryGetFetchUrl();
+//     return remoteUrl == repositoryUrl;
+// }
