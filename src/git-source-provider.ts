@@ -97,6 +97,12 @@ export async function getSource(
         }
 
         // Clean
+        if (clean) {
+            let softCleanSucceed = true;
+
+            // git clean -ffdx
+            let exitCode_clean
+        }
     }
     else {
         await io.rmRF(repositoryPath);
