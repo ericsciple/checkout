@@ -16,11 +16,12 @@ export interface IGitCommandManager {
     trySubmoduleReset(): Promise<number>;
 }
 
-export async function CreateCommandManager(workingDirectory: string, lfs: boolean): Promise<IGitCommandManager> {
+export async function CreateCommandManager(
+    workingDirectory: string,
+    lfs: boolean):
+    Promise<IGitCommandManager> {
 
-    let commandManager = new GitCommandManager(workingDirectory, lfs);
-    await commandManager.initializeCommandManager();
-    return commandManager;
+    return await GitCommandManager.createCommandManager(workingDirectory, lfs);
 }
 
 class GitCommandManager {
@@ -42,7 +43,11 @@ class GitCommandManager {
         this.workingDirectory = path;
     }
 
-    // git config --get remote.origin.url
+    public async tryClean(): Promise<number> {
+        let output = await this.execGit(['clean', '-ffdx'], true);
+        return output.exitCode;
+    }
+
     public async tryGetFetchUrl(): Promise<string> {
         let output = await this.execGit(['config', '--get', 'remote.origin.url'], true);
 
@@ -58,6 +63,21 @@ class GitCommandManager {
         return stdout;
     }
 
+    public async tryReset(): Promise<number> {
+        let output = await this.execGit(['reset', '--hard', 'HEAD'], true);
+        return output.exitCode;
+    }
+
+    public async trySubmoduleClean(): Promise<number> {
+        let output = await this.execGit(['submodule', 'foreach', 'git', 'clean', '-ffdx'], true);
+        return output.exitCode;
+    }
+
+    public async trySubmoduleReset(): Promise<number> {
+        let output = await this.execGit(['submodule', 'foreach', 'git', 'reset', '--hard', 'HEAD'], true);
+        return output.exitCode;
+    }
+
     public static async createCommandManager(
         workingDirectory: string,
         lfs: boolean):
@@ -70,7 +90,7 @@ class GitCommandManager {
 
     private async execGit(
         args: string[],
-        ignoreReturnCode: boolean = false):
+        allowAllExitCodes: boolean = false):
         Promise<GitOutput> {
 
         let result = new GitOutput();
@@ -79,18 +99,21 @@ class GitCommandManager {
         Object.keys(process.env).forEach(x => env[x] = process.env[x]);
         Object.keys(this.gitEnv).forEach(x => env[x] = this.gitEnv[x]);
 
+        let stdout: string[] = [];
+
         let options = {
             cwd: this.workingDirectory,
             env: env,
-            ignoreReturnCode: ignoreReturnCode,
+            ignoreReturnCode: allowAllExitCodes,
             listeners: {
                 stdout: (data: Buffer) => {
-                    result.stdout += data.toString();
+                    stdout.push(data.toString());
                 }
             }
         };
 
         result.exitCode = await exec.exec(this.gitPath, args, options);
+        result.stdout = stdout.join('');
         return result;
     }
 

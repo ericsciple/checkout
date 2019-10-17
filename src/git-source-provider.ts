@@ -75,110 +75,92 @@ export async function getSource(
     let repositoryUrl = `https://github.com/${encodeURIComponent(repositoryOwner)}/${encodeURIComponent(repositoryName)}`;
 
     let git = await gitCommandManager.CreateCommandManager(runnerWorkspacePath, lfs);
+    let exitCode: number;
 
     git.setWorkingDirectory(repositoryPath);
 
-    if (fsHelper.directoryExistsSync(path.join(repositoryPath, '.git')) &&
-        repositoryUrl == await git.tryGetFetchUrl()) {
+    // Repository exists
+    if (fsHelper.existsSync(repositoryPath)) {
 
-        // Delete any index.lock and shallow.lock left by a previously canceled run or crashed git process
-        let lockPaths = [
-            path.join(repositoryPath, '.git', 'index.lock'),
-            path.join(repositoryPath, '.git', 'shallow.lock')
-        ];
-        for (let i = 0; i < lockPaths.length; i++) {
-            let lockPath = lockPaths[i];
-            try {
-                await io.rmRF(lockPath);
-            }
-            catch (error) {
-                core.debug(`Unable to delete '${lockPath}'. ${error.message}`);
-            }
+        let deleteRepository = false;
+
+        // Fetch URL does not match
+        if (!fsHelper.directoryExistsSync(path.join(repositoryPath, '.git')) ||
+            repositoryUrl != await git.tryGetFetchUrl()) {
+
+            deleteRepository = true;
         }
-
-        // Clean
-        if (clean) {
-            let softCleanSucceed = true;
-
-            // git clean -ffdx
-            let exitCode_clean
-        }
-    }
-    else {
-        await io.rmRF(repositoryPath);
-    }
-
-    io.mkdirP(repositoryPath);
-};
-
-// 
-
-/*
-                // When repo.clean is selected for a git repo, execute git clean -ffdx and git reset --hard HEAD on the current repo.
-                // This will help us save the time to reclone the entire repo.
-                // If any git commands exit with non-zero return code or any exception happened during git.exe invoke, fall back to delete the repo folder.
-                if (clean)
-                {
-                    Boolean softCleanSucceed = true;
-
-                    // git clean -ffdx
-                    int exitCode_clean = await gitCommandManager.GitClean(executionContext, targetPath);
-                    if (exitCode_clean != 0)
-                    {
-                        executionContext.Debug($"'git clean -ffdx' failed with exit code {exitCode_clean}, this normally caused by:\n    1) Path too long\n    2) Permission issue\n    3) File in use\nFor futher investigation, manually run 'git clean -ffdx' on repo root: {targetPath} after each build.");
-                        softCleanSucceed = false;
-                    }
-
-                    // git reset --hard HEAD
-                    if (softCleanSucceed)
-                    {
-                        int exitCode_reset = await gitCommandManager.GitReset(executionContext, targetPath);
-                        if (exitCode_reset != 0)
-                        {
-                            executionContext.Debug($"'git reset --hard HEAD' failed with exit code {exitCode_reset}\nFor futher investigation, manually run 'git reset --hard HEAD' on repo root: {targetPath} after each build.");
-                            softCleanSucceed = false;
-                        }
-                    }
-
-                    // git clean -ffdx and git reset --hard HEAD for each submodule
-                    if (checkoutSubmodules)
-                    {
-                        if (softCleanSucceed)
-                        {
-                            int exitCode_submoduleclean = await gitCommandManager.GitSubmoduleClean(executionContext, targetPath);
-                            if (exitCode_submoduleclean != 0)
-                            {
-                                executionContext.Debug($"'git submodule foreach git clean -ffdx' failed with exit code {exitCode_submoduleclean}\nFor futher investigation, manually run 'git submodule foreach git clean -ffdx' on repo root: {targetPath} after each build.");
-                                softCleanSucceed = false;
-                            }
-                        }
-
-                        if (softCleanSucceed)
-                        {
-                            int exitCode_submodulereset = await gitCommandManager.GitSubmoduleReset(executionContext, targetPath);
-                            if (exitCode_submodulereset != 0)
-                            {
-                                executionContext.Debug($"'git submodule foreach git reset --hard HEAD' failed with exit code {exitCode_submodulereset}\nFor futher investigation, manually run 'git submodule foreach git reset --hard HEAD' on repo root: {targetPath} after each build.");
-                                softCleanSucceed = false;
-                            }
-                        }
-                    }
-
-                    if (!softCleanSucceed)
-                    {
-                        //fall back
-                        executionContext.Warning("Unable to run \"git clean -ffdx\" and \"git reset --hard HEAD\" successfully, delete source folder instead.");
-                        IOUtil.DeleteDirectory(targetPath, cancellationToken);
-                    }
+        // Fetch URL matches
+        else {
+            // Delete any index.lock and shallow.lock left by a previously canceled run or crashed git process
+            let lockPaths = [
+                path.join(repositoryPath, '.git', 'index.lock'),
+                path.join(repositoryPath, '.git', 'shallow.lock')
+            ];
+            for (let i = 0; i < lockPaths.length; i++) {
+                let lockPath = lockPaths[i];
+                try {
+                    await io.rmRF(lockPath);
+                }
+                catch (error) {
+                    core.debug(`Unable to delete '${lockPath}'. ${error.message}`);
                 }
             }
 
-            // if the folder is missing, create it
-            if (!Directory.Exists(targetPath))
-            {
-                Directory.CreateDirectory(targetPath);
-            }
+            // Clean
+            if (clean) {
+                exitCode = await git.tryClean();
+                if (exitCode != 0) {
+                    core.debug(`The command failed with exit code ${exitCode}. This might be caused by: 1) path too long, 2) permission issue, or 3) file in use. For futher investigation, manually run 'git clean -ffdx' on the directory '${repositoryPath}'.`);
+                    deleteRepository = true;
+                }
+                else {
+                    let commands = [git.tryReset];
+                    if (submodules) {
+                        commands.push(git.trySubmoduleClean);
+                        commands.push(git.trySubmoduleReset);
+                    }
 
+                    for (let i = 0; i < commands.length; i++) {
+                        exitCode = await commands[i]();
+                        if (exitCode != 0) {
+                            core.debug(`The command failed with exit code ${exitCode}`);
+                            deleteRepository = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (deleteRepository) {
+                    core.warning(`Unable to clean or reset the repository. The repository will be recreated instead.`);
+                }
+            }
+        }
+
+        // Delete the repository
+        if (deleteRepository) {
+            await io.rmRF(repositoryPath);
+        }
+    }
+
+    io.mkdirP(repositoryPath);
+
+    core.info(`Working directory is '${repositoryPath}'`);
+
+    // Initialize the repository
+    if (!fsHelper.directoryExistsSync(path.join(repositoryPath, '.git'))) {
+        await git.init();
+        await git.remoteAdd();
+    }
+
+    // Disable automatic garbage collection
+    exitCode = git.tryDisableAutomaticGarbageCollection();
+    if (exitCode != 0) {
+        core.warning(`Unable to turn off git automatic garbage collection. The git fetch operation may trigger garbage collection and cause a delay.`);
+    }
+};
+
+/*
             // if the folder contains a .git folder, it means the folder contains a git repo that matches the remote url and in a clean state.
             // we will run git fetch to update the repo.
             if (!Directory.Exists(Path.Combine(targetPath, ".git")))
@@ -224,7 +206,7 @@ export async function getSource(
             List<string> additionalLfsFetchArgs = new List<string>();
 
             // Add http.https://github.com.extraheader=... to gitconfig
-            // accessToken as basic auth header to handle any auth challenge from github.com 
+            // accessToken as basic auth header to handle any auth challenge from github.com
             string configKey = $"http.https://github.com/.extraheader";
             string configValue = $"\"AUTHORIZATION: {GenerateBasicAuthHeader(executionContext, accessToken)}\"";
             configModifications[configKey] = configValue.Trim('\"');
@@ -311,7 +293,7 @@ export async function getSource(
 
             // Checkout
             // sourceToBuild is used for checkout
-            // if sourceBranch is a PR branch or sourceVersion is null, make sure branch name is a remote branch. we need checkout to detached head. 
+            // if sourceBranch is a PR branch or sourceVersion is null, make sure branch name is a remote branch. we need checkout to detached head.
             // (change refs/heads to refs/remotes/origin, refs/pull to refs/remotes/pull, or leave it as it when the branch name doesn't contain refs/...)
             // if sourceVersion provide, just use that for checkout, since when you checkout a commit, it will end up in detached head.
             cancellationToken.ThrowIfCancellationRequested();
@@ -415,7 +397,7 @@ export async function getSource(
                     executionContext.Debug("Use SChannel SslBackend for git submodule update.");
                     additionalSubmoduleUpdateArgs.Add("-c http.sslbackend=\"schannel\"");
                 }
-#endif                    
+#endif
 
                 int exitCode_submoduleUpdate = await gitCommandManager.GitSubmoduleUpdate(executionContext, targetPath, fetchDepth, string.Join(" ", additionalSubmoduleUpdateArgs), checkoutNestedSubmodules, cancellationToken);
                 if (exitCode_submoduleUpdate != 0)
@@ -487,7 +469,7 @@ export async function getSource(
 
         private string GenerateBasicAuthHeader(RunnerActionPluginExecutionContext executionContext, string accessToken)
         {
-            // use basic auth header with username:password in base64encoding. 
+            // use basic auth header with username:password in base64encoding.
             string authHeader = $"x-access-token:{accessToken}";
             string base64encodedAuthHeader = Convert.ToBase64String(Encoding.UTF8.GetBytes(authHeader));
 
