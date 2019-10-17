@@ -150,44 +150,31 @@ export async function getSource(
     // Initialize the repository
     if (!fsHelper.directoryExistsSync(path.join(repositoryPath, '.git'))) {
         await git.init();
-        await git.remoteAdd();
+        await git.remoteAdd('origin', repositoryUrl);
     }
 
     // Disable automatic garbage collection
-    exitCode = git.tryDisableAutomaticGarbageCollection();
+    exitCode = await git.tryDisableAutomaticGarbageCollection();
     if (exitCode != 0) {
         core.warning(`Unable to turn off git automatic garbage collection. The git fetch operation may trigger garbage collection and cause a delay.`);
     }
+
+    // `http.${repositoryUrl}.extraheader`
 };
 
+
+async function removeGitConfig(
+    git: gitCommandManager.IGitCommandManager,
+    configKey: string)
+{
+    if (await git.configExist(configKey) &&
+        !(await git.tryConfigUnset(configKey))) {
+
+        core.warning(`Failed to remove '${configKey}' from the git config`);
+    }
+}
+
 /*
-            // if the folder contains a .git folder, it means the folder contains a git repo that matches the remote url and in a clean state.
-            // we will run git fetch to update the repo.
-            if (!Directory.Exists(Path.Combine(targetPath, ".git")))
-            {
-                // init git repository
-                int exitCode_init = await gitCommandManager.GitInit(executionContext, targetPath);
-                if (exitCode_init != 0)
-                {
-                    throw new InvalidOperationException($"Unable to use git.exe init repository under {targetPath}, 'git init' failed with exit code: {exitCode_init}");
-                }
-
-                int exitCode_addremote = await gitCommandManager.GitRemoteAdd(executionContext, targetPath, "origin", repositoryUrl.AbsoluteUri);
-                if (exitCode_addremote != 0)
-                {
-                    throw new InvalidOperationException($"Unable to use git.exe add remote 'origin', 'git remote add' failed with exit code: {exitCode_addremote}");
-                }
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // disable git auto gc
-            int exitCode_disableGC = await gitCommandManager.GitDisableAutoGC(executionContext, targetPath);
-            if (exitCode_disableGC != 0)
-            {
-                executionContext.Warning("Unable turn off git auto garbage collection, git fetch operation may trigger auto garbage collection which will affect the performance of fetching.");
-            }
-
             // always remove any possible left extraheader setting from git config.
             if (await gitCommandManager.GitConfigExist(executionContext, targetPath, $"http.{repositoryUrl.AbsoluteUri}.extraheader"))
             {

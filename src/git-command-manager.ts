@@ -8,8 +8,12 @@ import { ExecOptions } from 'child_process';
 import { context } from '@actions/github';
 
 export interface IGitCommandManager {
+    configExist(): Promise<boolean>;
+    init(): Promise<void>;
+    remoteAdd(remoteName: string, remoteUrl: string): Promise<void>;
     setWorkingDirectory(path: string);
     tryClean(): Promise<number>;
+    tryDisableAutomaticGarbageCollection(): Promise<number>;
     tryGetFetchUrl(): Promise<string>;
     tryReset(): Promise<number>;
     trySubmoduleClean(): Promise<number>;
@@ -33,11 +37,27 @@ class GitCommandManager {
     private lfs: boolean = false;
     private workingDirectory: string = '';
 
-    // Private constructor, use createCommandManager()
+    // Private constructor; use createCommandManager()
     private constructor() {
     }
 
-    // Set the working directory
+    public async configExists(configKey: string): Promise<boolean> {
+        let pattern = configKey.replace(/[^a-zA-Z0-9_]/g, (x) => { return `\\${x}`});
+        let output = await this.execGit(['config', '--name-only', '--get-regexp', pattern], true);
+        return output.exitCode == 0;
+    }
+
+    public async init() {
+        await this.execGit(['init', this.workingDirectory]);
+    }
+
+    public async remoteAdd(
+        remoteName: string,
+        remoteUrl: string) {
+
+        await this.execGit(['remote', 'add', remoteName, remoteUrl]);
+    }
+    
     public setWorkingDirectory(path: string) {
         fshelper.directoryExistsSync(path, true);
         this.workingDirectory = path;
@@ -48,6 +68,16 @@ class GitCommandManager {
         return output.exitCode;
     }
 
+    public async tryConfigUnset(configKey: string): Promise<boolean> {
+        let output = await this.execGit(['config', '--unset-all', configKey]);
+        return output.exitCode == 0;
+    }
+
+    public async tryDisableAutomaticGarbageCollection(): Promise<number> {
+        let output = await this.execGit(['config', 'gc.auto', '0'], true);
+        return output.exitCode;
+    }
+    
     public async tryGetFetchUrl(): Promise<string> {
         let output = await this.execGit(['config', '--get', 'remote.origin.url'], true);
 
@@ -84,7 +114,7 @@ class GitCommandManager {
         Promise<GitCommandManager> {
 
         let result = new GitCommandManager();
-        await result.initialize(workingDirectory, lfs);
+        await result.initializeCommandManager(workingDirectory, lfs);
         return result;
     }
 
@@ -117,7 +147,7 @@ class GitCommandManager {
         return result;
     }
 
-    private async initialize(
+    private async initializeCommandManager(
         workingDirectory: string,
         lfs: boolean) {
 
