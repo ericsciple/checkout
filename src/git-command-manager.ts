@@ -8,6 +8,7 @@ import { ExecOptions } from 'child_process';
 import { context } from '@actions/github';
 
 export interface IGitCommandManager {
+    config(configKey: string, configValue: string): Promise<void>;
     configExists(configKey: string): Promise<boolean>;
     init(): Promise<void>;
     remoteAdd(remoteName: string, remoteUrl: string): Promise<void>;

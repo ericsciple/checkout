@@ -163,37 +163,14 @@ export async function getSource(
     let base64Credentials = Buffer.from(`x-access-token:${accessToken}`, 'utf8').toString('base64');
     core.setSecret(base64Credentials);
     await git.config(`http.${repositoryUrl}.extraheader`, `AUTHORIZATION: basic ${base64Credentials}`);
+
+    if (lfs) {
+        // todo: LFS
+    }
 };
 
 
-
 /*
-            // use basic auth header with username:password in base64encoding.
-            string authHeader = $"x-access-token:{accessToken}";
-            string base64encodedAuthHeader = Convert.ToBase64String(Encoding.UTF8.GetBytes(authHeader));
-
-            // add base64 encoding auth header into secretMasker.
-            executionContext.AddMask(base64encodedAuthHeader);
-            return $"basic {base64encodedAuthHeader}";
-
-
-
-
-            List<string> additionalFetchArgs = new List<string>();
-            List<string> additionalLfsFetchArgs = new List<string>();
-
-            // Add http.https://github.com.extraheader=... to gitconfig
-            // accessToken as basic auth header to handle any auth challenge from github.com
-            string configKey = $"http.https://github.com/.extraheader";
-            string configValue = $"\"AUTHORIZATION: {GenerateBasicAuthHeader(executionContext, accessToken)}\"";
-            configModifications[configKey] = configValue.Trim('\"');
-            int exitCode_config = await gitCommandManager.GitConfig(executionContext, targetPath, configKey, configValue);
-            if (exitCode_config != 0)
-            {
-                throw new InvalidOperationException($"Git config failed with exit code: {exitCode_config}");
-            }
-
-
             // Prepare gitlfs url for fetch and checkout
             if (gitLfsSupport)
             {
