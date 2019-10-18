@@ -8,16 +8,17 @@ import { ExecOptions } from 'child_process';
 import { context } from '@actions/github';
 
 export interface IGitCommandManager {
-    configExist(): Promise<boolean>;
+    configExists(configKey: string): Promise<boolean>;
     init(): Promise<void>;
     remoteAdd(remoteName: string, remoteUrl: string): Promise<void>;
     setWorkingDirectory(path: string);
-    tryClean(): Promise<number>;
-    tryDisableAutomaticGarbageCollection(): Promise<number>;
+    tryClean(): Promise<boolean>;
+    tryConfigUnset(configKey: string): Promise<boolean>;
+    tryDisableAutomaticGarbageCollection(): Promise<boolean>;
     tryGetFetchUrl(): Promise<string>;
-    tryReset(): Promise<number>;
-    trySubmoduleClean(): Promise<number>;
-    trySubmoduleReset(): Promise<number>;
+    tryReset(): Promise<boolean>;
+    trySubmoduleClean(): Promise<boolean>;
+    trySubmoduleReset(): Promise<boolean>;
 }
 
 export async function CreateCommandManager(
@@ -63,19 +64,19 @@ class GitCommandManager {
         this.workingDirectory = path;
     }
 
-    public async tryClean(): Promise<number> {
+    public async tryClean(): Promise<boolean> {
         let output = await this.execGit(['clean', '-ffdx'], true);
-        return output.exitCode;
-    }
-
-    public async tryConfigUnset(configKey: string): Promise<boolean> {
-        let output = await this.execGit(['config', '--unset-all', configKey]);
         return output.exitCode == 0;
     }
 
-    public async tryDisableAutomaticGarbageCollection(): Promise<number> {
+    public async tryConfigUnset(configKey: string): Promise<boolean> {
+        let output = await this.execGit(['config', '--unset-all', configKey], true);
+        return output.exitCode == 0;
+    }
+
+    public async tryDisableAutomaticGarbageCollection(): Promise<boolean> {
         let output = await this.execGit(['config', 'gc.auto', '0'], true);
-        return output.exitCode;
+        return output.exitCode == 0;
     }
     
     public async tryGetFetchUrl(): Promise<string> {
@@ -93,19 +94,19 @@ class GitCommandManager {
         return stdout;
     }
 
-    public async tryReset(): Promise<number> {
+    public async tryReset(): Promise<boolean> {
         let output = await this.execGit(['reset', '--hard', 'HEAD'], true);
-        return output.exitCode;
+        return output.exitCode == 0;
     }
 
-    public async trySubmoduleClean(): Promise<number> {
+    public async trySubmoduleClean(): Promise<boolean> {
         let output = await this.execGit(['submodule', 'foreach', 'git', 'clean', '-ffdx'], true);
-        return output.exitCode;
+        return output.exitCode == 0;
     }
 
-    public async trySubmoduleReset(): Promise<number> {
+    public async trySubmoduleReset(): Promise<boolean> {
         let output = await this.execGit(['submodule', 'foreach', 'git', 'reset', '--hard', 'HEAD'], true);
-        return output.exitCode;
+        return output.exitCode == 0;
     }
 
     public static async createCommandManager(

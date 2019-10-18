@@ -109,9 +109,8 @@ export async function getSource(
 
             // Clean
             if (clean) {
-                exitCode = await git.tryClean();
-                if (exitCode != 0) {
-                    core.debug(`The command failed with exit code ${exitCode}. This might be caused by: 1) path too long, 2) permission issue, or 3) file in use. For futher investigation, manually run 'git clean -ffdx' on the directory '${repositoryPath}'.`);
+                if (!(await git.tryClean())) {
+                    core.debug(`The clean command failed. This might be caused by: 1) path too long, 2) permission issue, or 3) file in use. For futher investigation, manually run 'git clean -ffdx' on the directory '${repositoryPath}'.`);
                     deleteRepository = true;
                 }
                 else {
@@ -122,9 +121,7 @@ export async function getSource(
                     }
 
                     for (let i = 0; i < commands.length; i++) {
-                        exitCode = await commands[i]();
-                        if (exitCode != 0) {
-                            core.debug(`The command failed with exit code ${exitCode}`);
+                        if (!(await commands[i]())) {
                             deleteRepository = true;
                             break;
                         }
@@ -154,20 +151,21 @@ export async function getSource(
     }
 
     // Disable automatic garbage collection
-    exitCode = await git.tryDisableAutomaticGarbageCollection();
-    if (exitCode != 0) {
+    if (!(await git.tryDisableAutomaticGarbageCollection())) {
         core.warning(`Unable to turn off git automatic garbage collection. The git fetch operation may trigger garbage collection and cause a delay.`);
     }
 
-    // `http.${repositoryUrl}.extraheader`
+    // Remove possible previous extraheader
+    await removeGitConfig(git, `http.${repositoryUrl}.extraheader`);
 };
 
 
+// todo: add overload to force removal?
 async function removeGitConfig(
     git: gitCommandManager.IGitCommandManager,
     configKey: string)
 {
-    if (await git.configExist(configKey) &&
+    if (await git.configExists(configKey) &&
         !(await git.tryConfigUnset(configKey))) {
 
         core.warning(`Failed to remove '${configKey}' from the git config`);
@@ -175,19 +173,6 @@ async function removeGitConfig(
 }
 
 /*
-            // always remove any possible left extraheader setting from git config.
-            if (await gitCommandManager.GitConfigExist(executionContext, targetPath, $"http.{repositoryUrl.AbsoluteUri}.extraheader"))
-            {
-                executionContext.Debug("Remove any extraheader setting from git config.");
-                await RemoveGitConfig(executionContext, gitCommandManager, targetPath, $"http.{repositoryUrl.AbsoluteUri}.extraheader", string.Empty);
-            }
-
-            // always remove any possible left proxy setting from git config, the proxy setting may contains credential
-            if (await gitCommandManager.GitConfigExist(executionContext, targetPath, $"http.proxy"))
-            {
-                executionContext.Debug("Remove any proxy setting from git config.");
-                await RemoveGitConfig(executionContext, gitCommandManager, targetPath, $"http.proxy", string.Empty);
-            }
 
             List<string> additionalFetchArgs = new List<string>();
             List<string> additionalLfsFetchArgs = new List<string>();
@@ -203,55 +188,7 @@ async function removeGitConfig(
                 throw new InvalidOperationException($"Git config failed with exit code: {exitCode_config}");
             }
 
-            // Prepare proxy config for fetch.
-            if (runnerProxy != null && !string.IsNullOrEmpty(runnerProxy.ProxyAddress) && !runnerProxy.WebProxy.IsBypassed(repositoryUrl))
-            {
-                executionContext.Debug($"Config proxy server '{runnerProxy.ProxyAddress}' for git fetch.");
-                ArgUtil.NotNullOrEmpty(proxyUrlWithCredString, nameof(proxyUrlWithCredString));
-                additionalFetchArgs.Add($"-c http.proxy=\"{proxyUrlWithCredString}\"");
-                additionalLfsFetchArgs.Add($"-c http.proxy=\"{proxyUrlWithCredString}\"");
-            }
 
-            // Prepare ignore ssl cert error config for fetch.
-            if (acceptUntrustedCerts)
-            {
-                additionalFetchArgs.Add($"-c http.sslVerify=false");
-                additionalLfsFetchArgs.Add($"-c http.sslVerify=false");
-            }
-
-            // Prepare self-signed CA cert config for fetch from server.
-            if (useSelfSignedCACert)
-            {
-                executionContext.Debug($"Use self-signed certificate '{runnerCert.CACertificateFile}' for git fetch.");
-                additionalFetchArgs.Add($"-c http.sslcainfo=\"{runnerCert.CACertificateFile}\"");
-                additionalLfsFetchArgs.Add($"-c http.sslcainfo=\"{runnerCert.CACertificateFile}\"");
-            }
-
-            // Prepare client cert config for fetch from server.
-            if (useClientCert)
-            {
-                executionContext.Debug($"Use client certificate '{runnerCert.ClientCertificateFile}' for git fetch.");
-
-                if (!string.IsNullOrEmpty(clientCertPrivateKeyAskPassFile))
-                {
-                    additionalFetchArgs.Add($"-c http.sslcert=\"{runnerCert.ClientCertificateFile}\" -c http.sslkey=\"{runnerCert.ClientCertificatePrivateKeyFile}\" -c http.sslCertPasswordProtected=true -c core.askpass=\"{clientCertPrivateKeyAskPassFile}\"");
-                    additionalLfsFetchArgs.Add($"-c http.sslcert=\"{runnerCert.ClientCertificateFile}\" -c http.sslkey=\"{runnerCert.ClientCertificatePrivateKeyFile}\" -c http.sslCertPasswordProtected=true -c core.askpass=\"{clientCertPrivateKeyAskPassFile}\"");
-                }
-                else
-                {
-                    additionalFetchArgs.Add($"-c http.sslcert=\"{runnerCert.ClientCertificateFile}\" -c http.sslkey=\"{runnerCert.ClientCertificatePrivateKeyFile}\"");
-                    additionalLfsFetchArgs.Add($"-c http.sslcert=\"{runnerCert.ClientCertificateFile}\" -c http.sslkey=\"{runnerCert.ClientCertificatePrivateKeyFile}\"");
-                }
-            }
-
-#if OS_WINDOWS
-            if (schannelSslBackend)
-            {
-                executionContext.Debug("Use SChannel SslBackend for git fetch.");
-                additionalFetchArgs.Add("-c http.sslbackend=\"schannel\"");
-                additionalLfsFetchArgs.Add("-c http.sslbackend=\"schannel\"");
-            }
-#endif
             // Prepare gitlfs url for fetch and checkout
             if (gitLfsSupport)
             {
