@@ -3,6 +3,7 @@ import * as fsHelper from './fs-helper';
 import * as gitCommandManager from './git-command-manager';
 import * as io from '@actions/io';
 import * as path from 'path';
+import { access } from 'fs';
 
 /*
 using Pipelines = GitHub.DistributedTask.Pipelines;
@@ -157,22 +158,26 @@ export async function getSource(
 
     // Remove possible previous extraheader
     await removeGitConfig(git, `http.${repositoryUrl}.extraheader`);
+
+    // Add extraheader (auth)
+    let base64Credentials = Buffer.from(`x-access-token:${accessToken}`, 'utf8').toString('base64');
+    core.setSecret(base64Credentials);
+    await git.config(`http.${repositoryUrl}.extraheader`, `AUTHORIZATION: basic ${base64Credentials}`);
 };
 
 
-// todo: add overload to force removal?
-async function removeGitConfig(
-    git: gitCommandManager.IGitCommandManager,
-    configKey: string)
-{
-    if (await git.configExists(configKey) &&
-        !(await git.tryConfigUnset(configKey))) {
-
-        core.warning(`Failed to remove '${configKey}' from the git config`);
-    }
-}
 
 /*
+            // use basic auth header with username:password in base64encoding.
+            string authHeader = $"x-access-token:{accessToken}";
+            string base64encodedAuthHeader = Convert.ToBase64String(Encoding.UTF8.GetBytes(authHeader));
+
+            // add base64 encoding auth header into secretMasker.
+            executionContext.AddMask(base64encodedAuthHeader);
+            return $"basic {base64encodedAuthHeader}";
+
+
+
 
             List<string> additionalFetchArgs = new List<string>();
             List<string> additionalLfsFetchArgs = new List<string>();
@@ -522,3 +527,15 @@ async function removeGitConfig(
 //     let remoteUrl = await git.tryGetFetchUrl();
 //     return remoteUrl == repositoryUrl;
 // }
+
+// todo: add overload to force removal?
+async function removeGitConfig(
+    git: gitCommandManager.IGitCommandManager,
+    configKey: string) {
+
+    if (await git.configExists(configKey) &&
+        !(await git.tryConfigUnset(configKey))) {
+
+        core.warning(`Failed to remove '${configKey}' from the git config`);
+    }
+}

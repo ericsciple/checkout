@@ -3,7 +3,7 @@ import * as exec from '@actions/exec'
 import * as execInterfaces from '@actions/exec/lib/interfaces'
 import * as fshelper from './fs-helper';
 import * as io from '@actions/io';
-import { defaultCoreCipherList } from 'constants';
+import { defaultCoreCipherList, SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION } from 'constants';
 import { ExecOptions } from 'child_process';
 import { context } from '@actions/github';
 
@@ -42,6 +42,13 @@ class GitCommandManager {
     private constructor() {
     }
 
+    public async config(
+        configKey: string,
+        configValue: string) {
+
+        await this.execGit(['config', configKey, configValue]);
+    }
+    
     public async configExists(configKey: string): Promise<boolean> {
         let pattern = configKey.replace(/[^a-zA-Z0-9_]/g, (x) => { return `\\${x}`});
         let output = await this.execGit(['config', '--name-only', '--get-regexp', pattern], true);
