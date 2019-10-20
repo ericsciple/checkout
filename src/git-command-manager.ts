@@ -1,18 +1,17 @@
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
-import * as execInterfaces from '@actions/exec/lib/interfaces'
 import * as fshelper from './fs-helper';
 import * as io from '@actions/io';
-import { defaultCoreCipherList, SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION } from 'constants';
-import { ExecOptions } from 'child_process';
-import { context } from '@actions/github';
+import * as path from 'path';
 
 export interface IGitCommandManager {
     config(configKey: string, configValue: string): Promise<void>;
     configExists(configKey: string): Promise<boolean>;
+    fetch(fetchDepth: number, refSpec: string[]): Promise<void>;
     init(): Promise<void>;
+    lfsInstall(): Promise<void>;
     remoteAdd(remoteName: string, remoteUrl: string): Promise<void>;
-    setWorkingDirectory(path: string);
+    setWorkingDirectory(path: string): void;
     tryClean(): Promise<boolean>;
     tryConfigUnset(configKey: string): Promise<boolean>;
     tryDisableAutomaticGarbageCollection(): Promise<boolean>;
@@ -49,15 +48,49 @@ class GitCommandManager {
 
         await this.execGit(['config', configKey, configValue]);
     }
-    
+
     public async configExists(configKey: string): Promise<boolean> {
-        let pattern = configKey.replace(/[^a-zA-Z0-9_]/g, (x) => { return `\\${x}`});
+        let pattern = configKey.replace(/[^a-zA-Z0-9_]/g, (x) => { return `\\${x}` });
         let output = await this.execGit(['config', '--name-only', '--get-regexp', pattern], true);
         return output.exitCode == 0;
     }
 
+    public async fetch(
+        fetchDepth: number,
+        refSpec: string[])
+        : Promise<void> {
+
+        let args = ['fetch', '--tags', '--prune', '--progress', '--no-recurse-submodules'];
+        if (fetchDepth > 0) {
+            args.push(`--depth=${fetchDepth}`);
+        }
+        else if (fshelper.fileExistsSync(path.join(this.workingDirectory, '.git', 'shallow'))) {
+            args.push('--unshallow');
+        }
+
+        args.push('origin');
+        refSpec.forEach(x => args.push(x));
+
+        let attempt = 1;
+        while (true) {
+            let allowAllExitCodes = attempt < 3;
+            let output = await this.execGit(args, allowAllExitCodes);
+            if (output.exitCode == 0) {
+                break;
+            }
+
+            let seconds = this.getRandomIntInclusive(1, 10);
+            core.warning(`Git fetch failed with exit code ${output.exitCode}. Waiting ${seconds} seconds before trying again.`);
+            await this.sleep(seconds * 1000);
+        }
+    }
+
     public async init() {
         await this.execGit(['init', this.workingDirectory]);
+    }
+
+    public async lfsInstall() {
+        await this.execGit(['lfs', 'install', '--local']);
     }
 
     public async remoteAdd(
@@ -66,7 +99,7 @@ class GitCommandManager {
 
         await this.execGit(['remote', 'add', remoteName, remoteUrl]);
     }
-    
+
     public setWorkingDirectory(path: string) {
         fshelper.directoryExistsSync(path, true);
         this.workingDirectory = path;
@@ -86,7 +119,7 @@ class GitCommandManager {
         let output = await this.execGit(['config', 'gc.auto', '0'], true);
         return output.exitCode == 0;
     }
-    
+
     public async tryGetFetchUrl(): Promise<string> {
         let output = await this.execGit(['config', '--get', 'remote.origin.url'], true);
 
@@ -119,8 +152,8 @@ class GitCommandManager {
 
     public static async createCommandManager(
         workingDirectory: string,
-        lfs: boolean):
-        Promise<GitCommandManager> {
+        lfs: boolean)
+        : Promise<GitCommandManager> {
 
         let result = new GitCommandManager();
         await result.initializeCommandManager(workingDirectory, lfs);
@@ -129,8 +162,8 @@ class GitCommandManager {
 
     private async execGit(
         args: string[],
-        allowAllExitCodes: boolean = false):
-        Promise<GitOutput> {
+        allowAllExitCodes: boolean = false)
+        : Promise<GitOutput> {
 
         let result = new GitOutput();
 
@@ -220,6 +253,20 @@ class GitCommandManager {
         let gitHttpUserAgent = `git/${gitVersion} (github-actions-checkout)`;
         core.debug(`Set git useragent to: ${gitHttpUserAgent}`);
         this.gitEnv["GIT_HTTP_USER_AGENT"] = gitHttpUserAgent;
+    }
+
+    private getRandomIntInclusive(
+        minimum: number,
+        maximum: number)
+        : number {
+
+        minimum = Math.floor(minimum);
+        maximum = Math.floor(maximum);
+        return Math.floor(Math.random() * (maximum - minimum + 1)) + minimum;
+    }
+
+    private async sleep(milliseconds): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, milliseconds));
     }
 }
 

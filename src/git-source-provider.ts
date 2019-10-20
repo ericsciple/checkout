@@ -164,26 +164,45 @@ export async function getSource(
     core.setSecret(base64Credentials);
     await git.config(`http.${repositoryUrl}.extraheader`, `AUTHORIZATION: basic ${base64Credentials}`);
 
+    // LFS install
     if (lfs) {
-        // todo: LFS
+        await git.lfsInstall();
     }
+
+    // Refspec
+    let refSpec = ['+refs/heads/*:refs/remotes/origin/*'];
+    let upperSourceBranch = sourceBranch.toUpperCase();
+    let isPullRequest = upperSourceBranch.startsWith('REFS/PULL/') || upperSourceBranch.startsWith('REFS/REMOTES/PULL/');
+    let remotePullRequestRef = '';
+    if (isPullRequest) {
+        if (!sourceBranch) {
+            remotePullRequestRef = 'refs/remotes/origin/master';
+        }
+        else if (upperSourceBranch == 'MASTER') {
+            remotePullRequestRef = `refs/remotes/origin/${sourceBranch}`;
+        }
+        else if (upperSourceBranch.startsWith('REFS/HEADS/')) {
+            remotePullRequestRef = `refs/remotes/origin/${sourceBranch.substring('refs/heads/'.length)}`;
+        }
+        else if (upperSourceBranch.startsWith('REFS/PULL/')) {
+            remotePullRequestRef = `refs/remotes/pull/${sourceBranch.substring('refs/pull/'.length)}`;
+        }
+        else {
+            remotePullRequestRef = sourceBranch;
+        }
+
+        refSpec.push(`+${sourceBranch}:${remotePullRequestRef}`);
+    }
+
+    // Fetch
+    await git.fetch(fetchDepth, refSpec);
 };
 
 
 /*
-            // Prepare gitlfs url for fetch and checkout
-            if (gitLfsSupport)
-            {
-                // Initialize git lfs by execute 'git lfs install'
-                executionContext.Debug("Setup the local Git hooks for Git LFS.");
-                int exitCode_lfsInstall = await gitCommandManager.GitLFSInstall(executionContext, targetPath);
-                if (exitCode_lfsInstall != 0)
-                {
-                    throw new InvalidOperationException($"Git-lfs installation failed with exit code: {exitCode_lfsInstall}");
-                }
-            }
 
-            List<string> additionalFetchSpecs = new List<string>();
+
+List<string> additionalFetchSpecs = new List<string>();
             additionalFetchSpecs.Add("+refs/heads/*:refs/remotes/origin/*");
 
             if (IsPullRequest(sourceBranch))
