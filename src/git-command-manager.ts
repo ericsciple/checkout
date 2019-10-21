@@ -5,13 +5,18 @@ import * as io from '@actions/io';
 import * as path from 'path';
 
 export interface IGitCommandManager {
+    checkout(ref: string): Promise<void>;
     config(configKey: string, configValue: string): Promise<void>;
     configExists(configKey: string): Promise<boolean>;
     fetch(fetchDepth: number, refSpec: string[]): Promise<void>;
+    getWorkingDirectory(): string;
     init(): Promise<void>;
+    lfsFetch(ref: string): Promise<void>;
     lfsInstall(): Promise<void>;
     remoteAdd(remoteName: string, remoteUrl: string): Promise<void>;
     setWorkingDirectory(path: string): void;
+    submoduleSync(recursive: boolean): Promise<void>;
+    submoduleUpdate(fetchDepth: number, recursive: boolean): Promise<void>;
     tryClean(): Promise<boolean>;
     tryConfigUnset(configKey: string): Promise<boolean>;
     tryDisableAutomaticGarbageCollection(): Promise<boolean>;
@@ -40,6 +45,10 @@ class GitCommandManager {
 
     // Private constructor; use createCommandManager()
     private constructor() {
+    }
+
+    public async checkout(ref: string) {
+        await this.execGit(['checkout', '--progress', '--force', ref]);
     }
 
     public async config(
@@ -85,8 +94,29 @@ class GitCommandManager {
         }
     }
 
+    public getWorkingDirectory(): string {
+        return this.workingDirectory;
+    }
+
     public async init() {
         await this.execGit(['init', this.workingDirectory]);
+    }
+
+    public async lfsFetch(ref: string) {
+        let args = ['lfs', 'fetch', 'origin', ref];
+
+        let attempt = 1;
+        while (true) {
+            let allowAllExitCodes = attempt < 3;
+            let output = await this.execGit(args, allowAllExitCodes);
+            if (output.exitCode == 0) {
+                break;
+            }
+
+            let seconds = this.getRandomIntInclusive(1, 10);
+            core.warning(`Git lfs fetch failed with exit code ${output.exitCode}. Waiting ${seconds} seconds before trying again.`);
+            await this.sleep(seconds * 1000);
+        }
     }
 
     public async lfsInstall() {
@@ -103,6 +133,31 @@ class GitCommandManager {
     public setWorkingDirectory(path: string) {
         fshelper.directoryExistsSync(path, true);
         this.workingDirectory = path;
+    }
+
+    public async submoduleSync(recursive: boolean) {
+        let args = ['submodule', 'sync'];
+        if (recursive) {
+            args.push('--recursive');
+        }
+
+        await this.execGit(args);
+    }
+
+    public async submoduleUpdate(
+        fetchDepth: number,
+        recursive: boolean) {
+
+        let args = ['submodule', 'update', '--init', '--force'];
+        if (fetchDepth > 0) {
+            args.push(`--depth=${fetchDepth}`);
+        }
+
+        if (recursive) {
+            args.push('--recursive');
+        }
+
+        await this.execGit(args);
     }
 
     public async tryClean(): Promise<boolean> {
@@ -289,64 +344,6 @@ namespace GitHub.Runner.Plugins.Repository
 {
     public class GitCliManager
     {
-        // git init <LocalDir>
-        public async Task<int> GitInit(RunnerActionPluginExecutionContext context, string repositoryPath)
-        {
-            context.Debug($"Init git repository at: {repositoryPath}.");
-            string repoRootEscapeSpace = StringUtil.Format(@"""{0}""", repositoryPath.Replace(@"""", @"\"""));
-            return await ExecuteGitCommandAsync(context, repositoryPath, "init", StringUtil.Format($"{repoRootEscapeSpace}"));
-        }
-
-        // git fetch --tags --prune --progress --no-recurse-submodules [--depth=15] origin [+refs/pull/*:refs/remote/pull/*]
-        public async Task<int> GitFetch(RunnerActionPluginExecutionContext context, string repositoryPath, string remoteName, int fetchDepth, List<string> refSpec, string additionalCommandLine, CancellationToken cancellationToken)
-        {
-            context.Debug($"Fetch git repository at: {repositoryPath} remote: {remoteName}.");
-            if (refSpec != null && refSpec.Count > 0)
-            {
-                refSpec = refSpec.Where(r => !string.IsNullOrEmpty(r)).ToList();
-            }
-
-            // default options for git fetch.
-            string options = StringUtil.Format($"--tags --prune --progress --no-recurse-submodules {remoteName} {string.Join(" ", refSpec)}");
-
-            // If shallow fetch add --depth arg
-            // If the local repository is shallowed but there is no fetch depth provide for this build,
-            // add --unshallow to convert the shallow repository to a complete repository
-            if (fetchDepth > 0)
-            {
-                options = StringUtil.Format($"--tags --prune --progress --no-recurse-submodules --depth={fetchDepth} {remoteName} {string.Join(" ", refSpec)}");
-            }
-            else
-            {
-                if (File.Exists(Path.Combine(repositoryPath, ".git", "shallow")))
-                {
-                    options = StringUtil.Format($"--tags --prune --progress --no-recurse-submodules --unshallow {remoteName} {string.Join(" ", refSpec)}");
-                }
-            }
-
-            int retryCount = 0;
-            int fetchExitCode = 0;
-            while (retryCount < 3)
-            {
-                fetchExitCode = await ExecuteGitCommandAsync(context, repositoryPath, "fetch", options, additionalCommandLine, cancellationToken);
-                if (fetchExitCode == 0)
-                {
-                    break;
-                }
-                else
-                {
-                    if (++retryCount < 3)
-                    {
-                        var backOff = BackoffTimerHelper.GetRandomBackoff(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
-                        context.Warning($"Git fetch failed with exit code {fetchExitCode}, back off {backOff.TotalSeconds} seconds before retry.");
-                        await Task.Delay(backOff);
-                    }
-                }
-            }
-
-            return fetchExitCode;
-        }
-
         // git fetch --no-tags --prune --progress --no-recurse-submodules [--depth=15] origin [+refs/pull/*:refs/remote/pull/*] [+refs/tags/1:refs/tags/1]
         public async Task<int> GitFetchNoTags(RunnerActionPluginExecutionContext context, string repositoryPath, string remoteName, int fetchDepth, List<string> refSpec, string additionalCommandLine, CancellationToken cancellationToken)
         {
@@ -573,36 +570,6 @@ namespace GitHub.Runner.Plugins.Repository
         {
             context.Debug($"Undo any changes to tracked files in the working tree for submodules at {repositoryPath}.");
             return await ExecuteGitCommandAsync(context, repositoryPath, "submodule", "foreach git reset --hard HEAD");
-        }
-
-        // git submodule update --init --force [--depth=15] [--recursive]
-        public async Task<int> GitSubmoduleUpdate(RunnerActionPluginExecutionContext context, string repositoryPath, int fetchDepth, string additionalCommandLine, bool recursive, CancellationToken cancellationToken)
-        {
-            context.Debug("Update the registered git submodules.");
-            string options = "update --init --force";
-            if (fetchDepth > 0)
-            {
-                options = options + $" --depth={fetchDepth}";
-            }
-            if (recursive)
-            {
-                options = options + " --recursive";
-            }
-
-            return await ExecuteGitCommandAsync(context, repositoryPath, "submodule", options, additionalCommandLine, cancellationToken);
-        }
-
-        // git submodule sync [--recursive]
-        public async Task<int> GitSubmoduleSync(RunnerActionPluginExecutionContext context, string repositoryPath, bool recursive, CancellationToken cancellationToken)
-        {
-            context.Debug("Synchronizes submodules' remote URL configuration setting.");
-            string options = "sync";
-            if (recursive)
-            {
-                options = options + " --recursive";
-            }
-
-            return await ExecuteGitCommandAsync(context, repositoryPath, "submodule", options, cancellationToken);
         }
 
         // git config --get remote.origin.url

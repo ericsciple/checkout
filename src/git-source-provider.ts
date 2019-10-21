@@ -1,4 +1,6 @@
 import * as core from '@actions/core';
+import * as coreCommand from '@actions/core/lib/command';
+import * as fs from 'fs';
 import * as fsHelper from './fs-helper';
 import * as gitCommandManager from './git-command-manager';
 import * as io from '@actions/io';
@@ -173,170 +175,57 @@ export async function getSource(
     let refSpec = ['+refs/heads/*:refs/remotes/origin/*'];
     let upperSourceBranch = sourceBranch.toUpperCase();
     let isPullRequest = upperSourceBranch.startsWith('REFS/PULL/') || upperSourceBranch.startsWith('REFS/REMOTES/PULL/');
-    let remotePullRequestRef = '';
     if (isPullRequest) {
-        if (!sourceBranch) {
-            remotePullRequestRef = 'refs/remotes/origin/master';
-        }
-        else if (upperSourceBranch == 'MASTER') {
-            remotePullRequestRef = `refs/remotes/origin/${sourceBranch}`;
-        }
-        else if (upperSourceBranch.startsWith('REFS/HEADS/')) {
-            remotePullRequestRef = `refs/remotes/origin/${sourceBranch.substring('refs/heads/'.length)}`;
-        }
-        else if (upperSourceBranch.startsWith('REFS/PULL/')) {
-            remotePullRequestRef = `refs/remotes/pull/${sourceBranch.substring('refs/pull/'.length)}`;
-        }
-        else {
-            remotePullRequestRef = sourceBranch;
-        }
-
-        refSpec.push(`+${sourceBranch}:${remotePullRequestRef}`);
+        refSpec.push(`+${sourceBranch}:${getRemoteRef(sourceBranch)}`);
     }
 
     // Fetch
     await git.fetch(fetchDepth, refSpec);
+
+    // Checkout ref
+    // If sourceBranch is a PR branch or sourceVersion is null, make sure branch name is a remote branch. we need checkout to detached head
+    // (change refs/heads to refs/remotes/origin, refs/pull to refs/remotes/pull, or leave it as it when the branch name doesn't contain refs/...).
+    // If sourceVersion was provided, just use that for checkout, since when you checkout a commit, it will be detached head.
+    let checkoutRef = isPullRequest || !sourceVersion ? getRemoteRef(sourceBranch) : sourceVersion;
+
+    // LFS fetch
+    // Explicit lfs-fetch to avoid slow checkout (fetches one lfs object at a time).
+    // Explicit lfs fetch will fetch lfs objects in parallel.
+    if (lfs) {
+        try {
+            await git.lfsFetch(checkoutRef);
+        }
+        catch (err) {
+            if (fetchDepth > 0) {
+                core.warning(`Git LFS fetch failed on the shallow repository. This may happen when the retrieved commits (fetch depth ${fetchDepth}) for the branch does not include the target commit '${checkoutRef}'.`);
+            }
+
+            throw err;
+        }
+    }
+
+    // Checkout
+    try {
+        await git.checkout(checkoutRef);
+    }
+    catch (err) {
+        if (fetchDepth > 0) {
+            core.warning(`Git checkout failed on the shallow repository. This may happen when the retrieved commits (fetch depth ${fetchDepth}) for the branch does not include the target commit '${checkoutRef}'.`);
+        }
+
+        throw err;
+    }
+
+    // Submodules
+    if (submodules) {
+        git.submoduleSync(nestedSubmodules);
+        git.submoduleUpdate(fetchDepth, nestedSubmodules);
+    }
 };
 
 
+
 /*
-
-
-List<string> additionalFetchSpecs = new List<string>();
-            additionalFetchSpecs.Add("+refs/heads/*:refs/remotes/origin/*");
-
-            if (IsPullRequest(sourceBranch))
-            {
-                additionalFetchSpecs.Add($"+{sourceBranch}:{GetRemoteRefName(sourceBranch)}");
-            }
-
-            int exitCode_fetch = await gitCommandManager.GitFetch(executionContext, targetPath, "origin", fetchDepth, additionalFetchSpecs, string.Join(" ", additionalFetchArgs), cancellationToken);
-            if (exitCode_fetch != 0)
-            {
-                throw new InvalidOperationException($"Git fetch failed with exit code: {exitCode_fetch}");
-            }
-
-            // Checkout
-            // sourceToBuild is used for checkout
-            // if sourceBranch is a PR branch or sourceVersion is null, make sure branch name is a remote branch. we need checkout to detached head.
-            // (change refs/heads to refs/remotes/origin, refs/pull to refs/remotes/pull, or leave it as it when the branch name doesn't contain refs/...)
-            // if sourceVersion provide, just use that for checkout, since when you checkout a commit, it will end up in detached head.
-            cancellationToken.ThrowIfCancellationRequested();
-            string sourcesToBuild;
-            if (IsPullRequest(sourceBranch) || string.IsNullOrEmpty(sourceVersion))
-            {
-                sourcesToBuild = GetRemoteRefName(sourceBranch);
-            }
-            else
-            {
-                sourcesToBuild = sourceVersion;
-            }
-
-            // fetch lfs object upfront, this will avoid fetch lfs object during checkout which cause checkout taking forever
-            // since checkout will fetch lfs object 1 at a time, while git lfs fetch will fetch lfs object in parallel.
-            if (gitLfsSupport)
-            {
-                int exitCode_lfsFetch = await gitCommandManager.GitLFSFetch(executionContext, targetPath, "origin", sourcesToBuild, string.Join(" ", additionalLfsFetchArgs), cancellationToken);
-                if (exitCode_lfsFetch != 0)
-                {
-                    // local repository is shallow repository, lfs fetch may fail due to lack of commits history.
-                    // this will happen when the checkout commit is older than tip -> fetchDepth
-                    if (fetchDepth > 0)
-                    {
-                        executionContext.Warning($"Git lfs fetch failed on shallow repository, this might because of git fetch with depth '{fetchDepth}' doesn't include the lfs fetch commit '{sourcesToBuild}'.");
-                    }
-
-                    // git lfs fetch failed, get lfs log, the log is critical for debug.
-                    int exitCode_lfsLogs = await gitCommandManager.GitLFSLogs(executionContext, targetPath);
-                    throw new InvalidOperationException($"Git lfs fetch failed with exit code: {exitCode_lfsFetch}. Git lfs logs returned with exit code: {exitCode_lfsLogs}.");
-                }
-            }
-
-            // Finally, checkout the sourcesToBuild (if we didn't find a valid git object this will throw)
-            int exitCode_checkout = await gitCommandManager.GitCheckout(executionContext, targetPath, sourcesToBuild, cancellationToken);
-            if (exitCode_checkout != 0)
-            {
-                // local repository is shallow repository, checkout may fail due to lack of commits history.
-                // this will happen when the checkout commit is older than tip -> fetchDepth
-                if (fetchDepth > 0)
-                {
-                    executionContext.Warning($"Git checkout failed on shallow repository, this might because of git fetch with depth '{fetchDepth}' doesn't include the checkout commit '{sourcesToBuild}'.");
-                }
-
-                throw new InvalidOperationException($"Git checkout failed with exit code: {exitCode_checkout}");
-            }
-
-            // Submodule update
-            if (checkoutSubmodules)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                int exitCode_submoduleSync = await gitCommandManager.GitSubmoduleSync(executionContext, targetPath, checkoutNestedSubmodules, cancellationToken);
-                if (exitCode_submoduleSync != 0)
-                {
-                    throw new InvalidOperationException($"Git submodule sync failed with exit code: {exitCode_submoduleSync}");
-                }
-
-                List<string> additionalSubmoduleUpdateArgs = new List<string>();
-
-                // Prepare proxy config for submodule update.
-                if (runnerProxy != null && !string.IsNullOrEmpty(runnerProxy.ProxyAddress) && !runnerProxy.WebProxy.IsBypassed(repositoryUrl))
-                {
-                    executionContext.Debug($"Config proxy server '{runnerProxy.ProxyAddress}' for git submodule update.");
-                    ArgUtil.NotNullOrEmpty(proxyUrlWithCredString, nameof(proxyUrlWithCredString));
-                    additionalSubmoduleUpdateArgs.Add($"-c http.proxy=\"{proxyUrlWithCredString}\"");
-                }
-
-                // Prepare ignore ssl cert error config for fetch.
-                if (acceptUntrustedCerts)
-                {
-                    additionalSubmoduleUpdateArgs.Add($"-c http.sslVerify=false");
-                }
-
-                // Prepare self-signed CA cert config for submodule update.
-                if (useSelfSignedCACert)
-                {
-                    executionContext.Debug($"Use self-signed CA certificate '{runnerCert.CACertificateFile}' for git submodule update.");
-                    string authorityUrl = repositoryUrl.AbsoluteUri.Replace(repositoryUrl.PathAndQuery, string.Empty);
-                    additionalSubmoduleUpdateArgs.Add($"-c http.{authorityUrl}.sslcainfo=\"{runnerCert.CACertificateFile}\"");
-                }
-
-                // Prepare client cert config for submodule update.
-                if (useClientCert)
-                {
-                    executionContext.Debug($"Use client certificate '{runnerCert.ClientCertificateFile}' for git submodule update.");
-                    string authorityUrl = repositoryUrl.AbsoluteUri.Replace(repositoryUrl.PathAndQuery, string.Empty);
-
-                    if (!string.IsNullOrEmpty(clientCertPrivateKeyAskPassFile))
-                    {
-                        additionalSubmoduleUpdateArgs.Add($"-c http.{authorityUrl}.sslcert=\"{runnerCert.ClientCertificateFile}\" -c http.{authorityUrl}.sslkey=\"{runnerCert.ClientCertificatePrivateKeyFile}\" -c http.{authorityUrl}.sslCertPasswordProtected=true -c core.askpass=\"{clientCertPrivateKeyAskPassFile}\"");
-                    }
-                    else
-                    {
-                        additionalSubmoduleUpdateArgs.Add($"-c http.{authorityUrl}.sslcert=\"{runnerCert.ClientCertificateFile}\" -c http.{authorityUrl}.sslkey=\"{runnerCert.ClientCertificatePrivateKeyFile}\"");
-                    }
-                }
-#if OS_WINDOWS
-                if (schannelSslBackend)
-                {
-                    executionContext.Debug("Use SChannel SslBackend for git submodule update.");
-                    additionalSubmoduleUpdateArgs.Add("-c http.sslbackend=\"schannel\"");
-                }
-#endif
-
-                int exitCode_submoduleUpdate = await gitCommandManager.GitSubmoduleUpdate(executionContext, targetPath, fetchDepth, string.Join(" ", additionalSubmoduleUpdateArgs), checkoutNestedSubmodules, cancellationToken);
-                if (exitCode_submoduleUpdate != 0)
-                {
-                    throw new InvalidOperationException($"Git submodule update failed with exit code: {exitCode_submoduleUpdate}");
-                }
-            }
-
-            if (useClientCert && !string.IsNullOrEmpty(clientCertPrivateKeyAskPassFile))
-            {
-                executionContext.Debug("Remove git.sslkey askpass file.");
-                IOUtil.DeleteFile(clientCertPrivateKeyAskPassFile);
-            }
-
             // Set intra-task variable for post job cleanup
             executionContext.SetIntraActionState("repositoryPath", targetPath);
             executionContext.SetIntraActionState("modifiedgitconfig", JsonUtility.ToString(configModifications.Keys));
@@ -524,7 +413,25 @@ List<string> additionalFetchSpecs = new List<string>();
 //     return remoteUrl == repositoryUrl;
 // }
 
-// todo: add overload to force removal?
+function getRemoteRef(ref: string): string {
+    if (!ref) {
+        return 'refs/remotes/origin/master';
+    }
+
+    let upperRef = ref.toUpperCase();
+    if (upperRef == 'MASTER') {
+        return `refs/remotes/origin/${ref}`;
+    }
+    else if (upperRef.startsWith('REFS/HEADS/')) {
+        return `refs/remotes/origin/${ref.substring('refs/heads/'.length)}`;
+    }
+    else if (upperRef.startsWith('REFS/PULL/')) {
+        return `refs/remotes/pull/${ref.substring('refs/pull/'.length)}`;
+    }
+
+    return ref;
+}
+
 async function removeGitConfig(
     git: gitCommandManager.IGitCommandManager,
     configKey: string) {
@@ -532,6 +439,18 @@ async function removeGitConfig(
     if (await git.configExists(configKey) &&
         !(await git.tryConfigUnset(configKey))) {
 
-        core.warning(`Failed to remove '${configKey}' from the git config`);
+        // Load the config contents
+        core.warning(`Failed to remove '${configKey}' from the git config. Attempting to remove the config value by editing the file directly.`);
+        let configPath = path.join(git.getWorkingDirectory(), '.git', 'config');
+        fsHelper.fileExistsSync(configPath);
+        let contents = fs.readFileSync(configPath).toString() || '';
+
+        // Filter - only includes lines that do not contain the config key
+        let upperConfigKey = configKey.toUpperCase();
+        let split = contents.split('\n').filter(x => x.toUpperCase().indexOf(upperConfigKey) < 0);
+        contents = split.join('\n');
+
+        // Rewrite the config file
+        fs.writeFileSync(configPath, contents);
     }
 }
