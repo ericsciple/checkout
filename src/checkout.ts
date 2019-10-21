@@ -1,15 +1,10 @@
 import * as core from '@actions/core';
+import * as coreCommand from '@actions/core/lib/command';
 import * as fsHelper from './fs-helper';
 import * as gitSourceProvider from './git-source-provider';
 import * as github from '@actions/github'
 import * as io from '@actions/io';
 import * as path from 'path';
-
-// Object.keys(process.env).sort().forEach(
-//     key => {
-//         console.log(`${key}=${process.env[key]}`);
-//     });
-// console.log(`pwd=${process.cwd()}`);
 
 async function run() {
     try {
@@ -134,7 +129,7 @@ async function run() {
 
         try {
             // Register problem matcher
-            core.info(`::add-matcher::${path.join(__dirname, 'problem-matcher.json')}`);
+            coreCommand.issueCommand('add-matcher', {}, path.join(__dirname, 'problem-matcher.json'));
 
             // todo: Get sources
             await gitSourceProvider.getSource(
@@ -153,7 +148,7 @@ async function run() {
         }
         finally {
             // Unregister problem matcher
-            core.info('::remove-matcher owner=checkout-git::');
+            coreCommand.issueCommand('remove-matcher', {owner: "checkout-git"}, '');
         }
     }
     catch (error) {
@@ -161,45 +156,3 @@ async function run() {
     }
 }
 run();
-
-/**
-            bool clean = StringUtil.ConvertToBoolean(executionContext.GetInput(Pipelines.PipelineConstants.CheckoutTaskInputs.Clean), true);
-            string submoduleInput = executionContext.GetInput(Pipelines.PipelineConstants.CheckoutTaskInputs.Submodules);
-
-            int fetchDepth = 0;
-            if (!int.TryParse(executionContext.GetInput("fetch-depth"), out fetchDepth) || fetchDepth < 0)
-            {
-                fetchDepth = 0;
-            }
-
-            bool gitLfsSupport = StringUtil.ConvertToBoolean(executionContext.GetInput(Pipelines.PipelineConstants.CheckoutTaskInputs.Lfs));
-            string accessToken = executionContext.GetInput(Pipelines.PipelineConstants.CheckoutTaskInputs.Token);
-            if (string.IsNullOrEmpty(accessToken))
-            {
-                accessToken = executionContext.GetGitHubContext("token");
-            }
-
-            // register problem matcher
-            string matcherFile = Path.Combine(tempDirectory, $"git_{Guid.NewGuid()}.json");
-            File.WriteAllText(matcherFile, GitHubSourceProvider.ProblemMatcher, new UTF8Encoding(false));
-            executionContext.Output($"##[add-matcher]{matcherFile}");
-            try
-            {
-                await new GitHubSourceProvider().GetSourceAsync(executionContext,
-                                                                expectRepoPath,
-                                                                repoFullName,
-                                                                sourceBranch,
-                                                                sourceVersion,
-                                                                clean,
-                                                                submoduleInput,
-                                                                fetchDepth,
-                                                                gitLfsSupport,
-                                                                accessToken,
-                                                                token);
-            }
-            finally
-            {
-                executionContext.Output("##[remove-matcher owner=checkout-git]");
-            }
-
- */
