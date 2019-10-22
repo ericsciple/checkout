@@ -178,6 +178,9 @@ export async function cleanup() {
     if (!repositoryPath) {
         throw new Error('Environment variable STATE_repositoryPath not set');
     }
+    if (!fsHelper.fileExistsSync(path.join(repositoryPath, '.git', 'config'))) {
+        return;
+    }
     fsHelper.directoryExistsSync(repositoryPath, true);
 
     // Config key

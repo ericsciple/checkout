@@ -21,3 +21,4 @@ inputs:
 runs:
   using: node12
   main: lib/checkout.js
+  post: lib/post-checkout.js

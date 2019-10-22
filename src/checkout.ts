@@ -63,7 +63,7 @@ async function run() {
                 io.mv(originalRepositoryPath, repositoryPath, { force: true });
 
                 // Update the context
-                // todo: set-workspace
+                coreCommand.issueCommand('set-workspace', {}, repositoryPath);
             }
         }
 
@@ -131,7 +131,7 @@ async function run() {
             // Register problem matcher
             coreCommand.issueCommand('add-matcher', {}, path.join(__dirname, 'problem-matcher.json'));
 
-            // todo: Get sources
+            // Get sources
             await gitSourceProvider.getSource(
                 runnerWorkspacePath,
                 repositoryPath,
