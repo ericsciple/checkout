@@ -72,14 +72,21 @@ async function run() {
         let sourceVersion: string;
         let ref = core.getInput('ref');
         if (!ref) {
-            sourceBranch = github.context.ref;
-            sourceVersion = github.context.sha;
+            if (isSelfRepository) {
+                sourceBranch = github.context.ref;
+                sourceVersion = github.context.sha;
+            }
+            else {
+                sourceBranch = 'master';
+                sourceVersion = '';
+            }
         }
         // SHA?
         else if (ref.match(/^[0-9a-fA-F]{40}$/)) {
             // If ref is a SHA and the repo is self, use github.ref as source branch since it might be refs/pull/*
-            sourceBranch = isSelfRepository ? github.context.ref : 'refs/heads/master';
+            // sourceBranch = isSelfRepository ? github.context.ref : 'refs/heads/master';
 
+            sourceBranch = '';
             sourceVersion = ref;
         }
         else {

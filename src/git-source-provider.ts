@@ -11,8 +11,8 @@ export async function getSource(
     repositoryPath: string,
     repositoryOwner: string,
     repositoryName: string,
-    sourceBranch: string,
-    sourceVersion: string,
+    ref: string,
+    commit: string,
     clean: boolean,
     submodules: boolean,
     nestedSubmodules: boolean,
@@ -116,29 +116,19 @@ export async function getSource(
         await git.lfsInstall();
     }
 
-    // Refspec
-    let refSpec = ['+refs/heads/*:refs/remotes/origin/*'];
-    let upperSourceBranch = sourceBranch.toUpperCase();
-    let isPullRequest = upperSourceBranch.startsWith('REFS/PULL/') || upperSourceBranch.startsWith('REFS/REMOTES/PULL/');
-    if (isPullRequest) {
-        refSpec.push(`+${sourceBranch}:${getRemoteRef(sourceBranch)}`);
-    }
-
     // Fetch
+    let refSpec = getRefSpec(ref, commit);
     await git.fetch(fetchDepth, refSpec);
 
-    // Checkout ref
-    // If sourceBranch is a PR branch or sourceVersion is null, make sure branch name is a remote branch. we need checkout to detached head
-    // (change refs/heads to refs/remotes/origin, refs/pull to refs/remotes/pull, or leave it as it when the branch name doesn't contain refs/...).
-    // If sourceVersion was provided, just use that for checkout, since when you checkout a commit, it will be detached head.
-    let checkoutRef = isPullRequest || !sourceVersion ? getRemoteRef(sourceBranch) : sourceVersion;
+    // Checkout info
+    let checkoutInfo = await getCheckoutInfo(git, ref, commit);
 
     // LFS fetch
     // Explicit lfs-fetch to avoid slow checkout (fetches one lfs object at a time).
     // Explicit lfs fetch will fetch lfs objects in parallel.
     if (lfs) {
         try {
-            await git.lfsFetch(checkoutRef);
+            await git.lfsFetch(checkoutInfo.commit || checkoutInfo.ref);
         }
         catch (err) {
             if (fetchDepth > 0) {
@@ -151,7 +141,7 @@ export async function getSource(
 
     // Checkout
     try {
-        await git.checkout(checkoutRef);
+        await git.checkout(checkoutInfo.ref, checkoutInfo.commit);
     }
     catch (err) {
         if (fetchDepth > 0) {
@@ -160,6 +150,8 @@ export async function getSource(
 
         throw err;
     }
+
+    // todo: Set upstream
 
     // Submodules
     if (submodules) {
@@ -194,23 +186,84 @@ export async function cleanup() {
     await removeGitConfig(git, configKey);
 }
 
-function getRemoteRef(ref: string): string {
+function getRefSpec(
+    ref: string,
+    commit: string)
+    : string[] {
+
+    if (!ref && !commit) {
+        throw new Error('Args ref and commit cannot both be empty');
+    }
+
+    // If no ref, fetch all branches and tags. Fetching a specific commit is not reliable.
+    // GitHub does not allow fetching a specific commit unless the commit is the tip of a branch.
     if (!ref) {
-        return 'refs/remotes/origin/master';
+        return [`+refs/heads/*:refs/remotes/origin/*`, `+refs/tags/*:refs/tags/*`];
     }
 
+    // Unqualified ref, check for a matching branch or tag
     let upperRef = ref.toUpperCase();
-    if (upperRef == 'MASTER') {
-        return `refs/remotes/origin/${ref}`;
+    if (!upperRef.startsWith('REFS/')) {
+        return [`+refs/heads/${ref}*:refs/remotes/origin/${ref}*`, `+refs/tags/${ref}*:refs/tags/${ref}*`];
     }
+    // refs/heads/
     else if (upperRef.startsWith('REFS/HEADS/')) {
-        return `refs/remotes/origin/${ref.substring('refs/heads/'.length)}`;
+        return [`+${ref}:refs/remotes/origin/${ref.substring('refs/heads/'.length)}`];
     }
+    // refs/pull/
     else if (upperRef.startsWith('REFS/PULL/')) {
-        return `refs/remotes/pull/${ref.substring('refs/pull/'.length)}`;
+        return [`+${ref}:refs/remotes/pull/${ref.substring('refs/pull/'.length)}`];
+    }
+    // refs/tags/
+    else {
+        return [`+${ref}:${ref}`];
+    }
+}
+
+async function getCheckoutInfo(
+    git: gitCommandManager.IGitCommandManager,
+    ref: string,
+    commit: string)
+    : Promise<ICheckoutInfo> {
+
+    if (!ref && !commit) {
+        throw new Error('Args ref and commit cannot both be empty');
     }
 
-    return ref;
+    let result = {} as ICheckoutInfo;
+
+    if (commit) {
+        result.commit = commit;
+    }
+
+    // When the ref is unqualified, check for a matching branch
+    let upperRef = ref.toUpperCase();
+    if (!upperRef.startsWith('REFS/')) {
+
+        if (await git.branchExists(true, `origin/${ref}`)) {
+            result.ref = ref;
+            result.upstream = `origin/${ref}`;
+        }
+        else if (!commit) {
+            result.ref = `${ref}`;
+        }
+    }
+    // refs/heads/
+    else if (upperRef.startsWith('REFS/HEADS/')) {
+        let branch = ref.substring('refs/heads/'.length);
+        result.ref = branch;
+        result.upstream = `origin/${branch}`;
+    }
+    // Manually supplied refs/pull/ (no commit info)
+    else if (!commit && upperRef.startsWith('REFS/PULL/')) {
+        result.ref = `refs/remotes/pull/${ref.substring('refs/pull'.length)}`;
+    }
+    // Manually supplied refs/tags/ (no commit info)
+    else if (!commit) {
+        result.ref = ref;
+    }
+
+    return result;
 }
 
 async function removeGitConfig(
@@ -234,4 +287,10 @@ async function removeGitConfig(
         // Rewrite the config file
         fs.writeFileSync(configPath, contents);
     }
+}
+
+interface ICheckoutInfo {
+    ref: string;
+    commit: string;
+    upstream: string;
 }

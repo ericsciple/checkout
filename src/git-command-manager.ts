@@ -5,6 +5,7 @@ import * as io from '@actions/io';
 import * as path from 'path';
 
 export interface IGitCommandManager {
+    branchExists(remote: boolean, pattern: string): Promise<boolean>;
     checkout(ref: string): Promise<void>;
     config(configKey: string, configValue: string): Promise<void>;
     configExists(configKey: string): Promise<boolean>;
@@ -45,6 +46,21 @@ class GitCommandManager {
 
     // Private constructor; use createCommandManager()
     private constructor() {
+    }
+
+    public async branchExists(
+        remote: boolean,
+        pattern: string)
+        : Promise<boolean> {
+
+        let args = ['branch', '--list'];
+        if (remote) {
+            args.push('--remote');
+        }
+        args.push(pattern);
+
+        let output = await this.execGit(args);
+        return !!output.stdout.trim();
     }
 
     public async checkout(ref: string) {
