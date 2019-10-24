@@ -3,10 +3,11 @@ import * as exec from '@actions/exec'
 import * as fshelper from './fs-helper';
 import * as io from '@actions/io';
 import * as path from 'path';
+import { start } from 'repl';
 
 export interface IGitCommandManager {
     branchExists(remote: boolean, pattern: string): Promise<boolean>;
-    checkout(ref: string): Promise<void>;
+    checkout(ref: string, startPoint: string): Promise<void>;
     config(configKey: string, configValue: string): Promise<void>;
     configExists(configKey: string): Promise<boolean>;
     fetch(fetchDepth: number, refSpec: string[]): Promise<void>;
@@ -18,6 +19,7 @@ export interface IGitCommandManager {
     setWorkingDirectory(path: string): void;
     submoduleSync(recursive: boolean): Promise<void>;
     submoduleUpdate(fetchDepth: number, recursive: boolean): Promise<void>;
+    tagExists(pattern: string): Promise<boolean>;
     tryClean(): Promise<boolean>;
     tryConfigUnset(configKey: string): Promise<boolean>;
     tryDisableAutomaticGarbageCollection(): Promise<boolean>;
@@ -63,8 +65,19 @@ class GitCommandManager {
         return !!output.stdout.trim();
     }
 
-    public async checkout(ref: string) {
-        await this.execGit(['checkout', '--progress', '--force', ref]);
+    public async checkout(
+        ref: string,
+        startPoint: string) {
+
+        let args = ['checkout', '--progress', '--force'];
+        if (startPoint) {
+            args.push('-B', ref, startPoint);
+        }
+        else {
+            args.push(ref);
+        }
+
+        await this.execGit(args);
     }
 
     public async config(
@@ -85,7 +98,7 @@ class GitCommandManager {
         refSpec: string[])
         : Promise<void> {
 
-        let args = ['fetch', '--tags', '--prune', '--progress', '--no-recurse-submodules'];
+        let args = ['-c', 'protocol.version=2', 'fetch', '--no-tags', '--prune', '--progress', '--no-recurse-submodules'];
         if (fetchDepth > 0) {
             args.push(`--depth=${fetchDepth}`);
         }
@@ -173,6 +186,11 @@ class GitCommandManager {
         }
 
         await this.execGit(args);
+    }
+
+    public async tagExists(pattern: string): Promise<boolean> {
+        let output = await this.execGit(['tag', '--list', pattern]);
+        return !!output.stdout.trim();
     }
 
     public async tryClean(): Promise<boolean> {

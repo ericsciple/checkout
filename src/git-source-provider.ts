@@ -127,31 +127,31 @@ export async function getSource(
     // Explicit lfs-fetch to avoid slow checkout (fetches one lfs object at a time).
     // Explicit lfs fetch will fetch lfs objects in parallel.
     if (lfs) {
-        try {
-            await git.lfsFetch(checkoutInfo.commit || checkoutInfo.ref);
-        }
-        catch (err) {
-            if (fetchDepth > 0) {
-                core.warning(`Git LFS fetch failed on the shallow repository. This may happen when the retrieved commits (fetch depth ${fetchDepth}) for the branch does not include the target commit '${checkoutRef}'.`);
-            }
+        await git.lfsFetch(checkoutInfo.startPoint || checkoutInfo.ref);
+        // try {
+        //     await git.lfsFetch(checkoutInfo.startPoint || checkoutInfo.ref);
+        // }
+        // catch (err) {
+        //     if (fetchDepth > 0) {
+        //         core.warning(`Git LFS fetch failed on the shallow repository. This may happen when the retrieved commits (fetch depth ${fetchDepth}) for the branch does not include the target commit '${checkoutRef}'.`);
+        //     }
 
-            throw err;
-        }
+        //     throw err;
+        // }
     }
 
     // Checkout
-    try {
-        await git.checkout(checkoutInfo.ref, checkoutInfo.commit);
-    }
-    catch (err) {
-        if (fetchDepth > 0) {
-            core.warning(`Git checkout failed on the shallow repository. This may happen when the retrieved commits (fetch depth ${fetchDepth}) for the branch does not include the target commit '${checkoutRef}'.`);
-        }
+    await git.checkout(checkoutInfo.ref, checkoutInfo.startPoint);
+    // try {
+    //     await git.checkout(checkoutInfo.ref, checkoutInfo.startPoint);
+    // }
+    // catch (err) {
+    //     if (fetchDepth > 0) {
+    //         core.warning(`Git checkout failed on the shallow repository. This may happen when the retrieved commits (fetch depth ${fetchDepth}) for the branch does not include the target commit '${checkoutRef}'.`);
+    //     }
 
-        throw err;
-    }
-
-    // todo: Set upstream
+    //     throw err;
+    // }
 
     // Submodules
     if (submodules) {
@@ -195,28 +195,46 @@ function getRefSpec(
         throw new Error('Args ref and commit cannot both be empty');
     }
 
-    // If no ref, fetch all branches and tags. Fetching a specific commit is not reliable.
-    // GitHub does not allow fetching a specific commit unless the commit is the tip of a branch.
-    if (!ref) {
-        return [`+refs/heads/*:refs/remotes/origin/*`, `+refs/tags/*:refs/tags/*`];
-    }
+    let upperRef = (ref || '').toUpperCase();
 
+    // SHA
+    if (commit) {
+        // refs/heads
+        if (upperRef.startsWith('REFS/HEADS/')) {
+            let branch = ref.substring('refs/heads/'.length);
+            return [`+${commit}:refs/remotes/origin/${branch}`];
+        }
+        // refs/pull/
+        else if (upperRef.startsWith('REFS/PULL/')) {
+            let branch = ref.substring('refs/pull/'.length);
+            return [`+${commit}:refs/remotes/pull/${branch}`];
+        }
+        // refs/tags/
+        else if (upperRef.startsWith('REFS/TAGS/')) {
+            return [`+${commit}:${ref}`];
+        }
+        // Otherwise no destination ref
+        else {
+            return [commit];
+        }
+    }
     // Unqualified ref, check for a matching branch or tag
-    let upperRef = ref.toUpperCase();
-    if (!upperRef.startsWith('REFS/')) {
+    else if (!upperRef.startsWith('REFS/')) {
         return [`+refs/heads/${ref}*:refs/remotes/origin/${ref}*`, `+refs/tags/${ref}*:refs/tags/${ref}*`];
     }
     // refs/heads/
     else if (upperRef.startsWith('REFS/HEADS/')) {
-        return [`+${ref}:refs/remotes/origin/${ref.substring('refs/heads/'.length)}`];
+        let branch = ref.substring('refs/heads/'.length);
+        return [`+${ref}:refs/remotes/origin/${branch}`];
     }
     // refs/pull/
     else if (upperRef.startsWith('REFS/PULL/')) {
-        return [`+${ref}:refs/remotes/pull/${ref.substring('refs/pull/'.length)}`];
+        let branch = ref.substring('refs/pull/'.length);
+        return [`+${ref}:refs/remotes/pull/${branch}`];
     }
     // refs/tags/
     else {
-        return [`+${ref}:${ref}`];
+        return [`+${ref}:${ref}`]
     }
 }
 
@@ -231,40 +249,123 @@ async function getCheckoutInfo(
     }
 
     let result = {} as ICheckoutInfo;
+    let upperRef = (ref || '').toUpperCase();
 
-    if (commit) {
-        result.commit = commit;
-    }
-
-    // When the ref is unqualified, check for a matching branch
-    let upperRef = ref.toUpperCase();
-    if (!upperRef.startsWith('REFS/')) {
-
-        if (await git.branchExists(true, `origin/${ref}`)) {
-            result.ref = ref;
-            result.upstream = `origin/${ref}`;
-        }
-        else if (!commit) {
-            result.ref = `${ref}`;
-        }
+    // SHA
+    if (!ref) {
+        result.ref = commit;
     }
     // refs/heads/
-    else if (upperRef.startsWith('REFS/HEADS/')) {
+    if (upperRef.startsWith('REFS/HEADS/')) {
         let branch = ref.substring('refs/heads/'.length);
         result.ref = branch;
-        result.upstream = `origin/${branch}`;
+        result.startPoint = `refs/remotes/origin/${branch}`;
     }
-    // Manually supplied refs/pull/ (no commit info)
-    else if (!commit && upperRef.startsWith('REFS/PULL/')) {
-        result.ref = `refs/remotes/pull/${ref.substring('refs/pull'.length)}`;
+    // refs/pull/
+    else if (upperRef.startsWith('REFS/PULL/')) {
+        let branch = ref.substring('refs/pull/'.length);
+        result.ref = `refs/remotes/pull/${branch}`;
     }
-    // Manually supplied refs/tags/ (no commit info)
-    else if (!commit) {
+    // refs/tags/
+    else if (upperRef.startsWith('REFS/')) {
         result.ref = ref;
+    }
+    // Unqualified ref, check for a matching branch or tag
+    else {
+        if (await git.branchExists(true, `origin/${ref}`)) {
+            result.ref = ref;
+            result.startPoint = `refs/remotes/origin/${ref}`;
+        }
+        else if (await git.tagExists(`refs/tags/${ref}`)) {
+            result.ref = `refs/tags/${ref}`;
+        }
+        else {
+            throw new Error(`A branch or tag with the name '${ref}' could not be found`);
+        }
     }
 
     return result;
 }
+
+// function getRefSpec(
+//     ref: string,
+//     commit: string)
+//     : string[] {
+
+//     if (!ref && !commit) {
+//         throw new Error('Args ref and commit cannot both be empty');
+//     }
+
+//     // If no ref, fetch all branches and tags. Fetching a specific commit is not reliable.
+//     // GitHub does not allow fetching a specific commit unless the commit is the tip of a branch.
+//     if (!ref) {
+//         return [`+refs/heads/*:refs/remotes/origin/*`, `+refs/tags/*:refs/tags/*`];
+//     }
+
+//     // Unqualified ref, check for a matching branch or tag
+//     let upperRef = ref.toUpperCase();
+//     if (!upperRef.startsWith('REFS/')) {
+//         return [`+refs/heads/${ref}*:refs/remotes/origin/${ref}*`, `+refs/tags/${ref}*:refs/tags/${ref}*`];
+//     }
+//     // refs/heads/
+//     else if (upperRef.startsWith('REFS/HEADS/')) {
+//         return [`+${ref}:refs/remotes/origin/${ref.substring('refs/heads/'.length)}`];
+//     }
+//     // refs/pull/
+//     else if (upperRef.startsWith('REFS/PULL/')) {
+//         return [`+${ref}:refs/remotes/pull/${ref.substring('refs/pull/'.length)}`];
+//     }
+//     // refs/tags/
+//     else {
+//         return [`+${ref}:${ref}`];
+//     }
+// }
+
+// async function getCheckoutInfo(
+//     git: gitCommandManager.IGitCommandManager,
+//     ref: string,
+//     commit: string)
+//     : Promise<ICheckoutInfo> {
+
+//     if (!ref && !commit) {
+//         throw new Error('Args ref and commit cannot both be empty');
+//     }
+
+//     let result = {} as ICheckoutInfo;
+
+//     if (commit) {
+//         result.commit = commit;
+//     }
+
+//     // When the ref is unqualified, check for a matching branch
+//     let upperRef = ref.toUpperCase();
+//     if (!upperRef.startsWith('REFS/')) {
+
+//         if (await git.branchExists(true, `origin/${ref}`)) {
+//             result.ref = ref;
+//             result.upstream = `origin/${ref}`;
+//         }
+//         else if (!commit) {
+//             result.ref = `${ref}`;
+//         }
+//     }
+//     // refs/heads/
+//     else if (upperRef.startsWith('REFS/HEADS/')) {
+//         let branch = ref.substring('refs/heads/'.length);
+//         result.ref = branch;
+//         result.upstream = `origin/${branch}`;
+//     }
+//     // Manually supplied refs/pull/ (no commit info)
+//     else if (!commit && upperRef.startsWith('REFS/PULL/')) {
+//         result.ref = `refs/remotes/pull/${ref.substring('refs/pull'.length)}`;
+//     }
+//     // Manually supplied refs/tags/ (no commit info)
+//     else if (!commit) {
+//         result.ref = ref;
+//     }
+
+//     return result;
+// }
 
 async function removeGitConfig(
     git: gitCommandManager.IGitCommandManager,
@@ -291,6 +392,5 @@ async function removeGitConfig(
 
 interface ICheckoutInfo {
     ref: string;
-    commit: string;
-    upstream: string;
+    startPoint: string;
 }
