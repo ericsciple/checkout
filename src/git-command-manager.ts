@@ -120,6 +120,7 @@ class GitCommandManager {
             let seconds = this.getRandomIntInclusive(1, 10);
             core.warning(`Git fetch failed with exit code ${output.exitCode}. Waiting ${seconds} seconds before trying again.`);
             await this.sleep(seconds * 1000);
+            attempt++;
         }
     }
 
@@ -145,6 +146,7 @@ class GitCommandManager {
             let seconds = this.getRandomIntInclusive(1, 10);
             core.warning(`Git lfs fetch failed with exit code ${output.exitCode}. Waiting ${seconds} seconds before trying again.`);
             await this.sleep(seconds * 1000);
+            attempt++;
         }
     }
 
