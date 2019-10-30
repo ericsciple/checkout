@@ -103,15 +103,13 @@ export async function getSource(
     }
 
     // Remove possible previous extraheader
-    // todo: should this be http.https://github.com/.extraheader instead ?
-    let extraHeaderConfigKey = `http.${repositoryUrl}/.extraheader`;
+    let extraHeaderConfigKey = `http.https://github.com/.extraheader`;
     await removeGitConfig(git, extraHeaderConfigKey);
 
     // Add extraheader (auth)
     let base64Credentials = Buffer.from(`x-access-token:${accessToken}`, 'utf8').toString('base64');
     core.setSecret(base64Credentials);
     await git.config(extraHeaderConfigKey, `AUTHORIZATION: basic ${base64Credentials}`);
-    await git.config('http.https://github.com/.extraheader', `AUTHORIZATION: basic asdf`);
 
     // LFS install
     if (lfs) {
@@ -161,7 +159,7 @@ export async function getSource(
         git.submoduleUpdate(fetchDepth, nestedSubmodules);
     }
 
-    // Log -1
+    // Dump some info about the checked out commit
     await git.log1();
 
     // Set intra-task state for cleanup
