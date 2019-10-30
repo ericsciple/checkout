@@ -98,6 +98,9 @@ class GitCommandManager {
         refSpec: string[])
         : Promise<void> {
 
+        this.execGit(['config', '--list']);
+        this.execGit(['fetch']);
+
         let args = ['-c', 'protocol.version=2', 'fetch', '--no-tags', '--prune', '--progress', '--no-recurse-submodules'];
         if (fetchDepth > 0) {
             args.push(`--depth=${fetchDepth}`);
