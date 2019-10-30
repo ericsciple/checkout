@@ -103,19 +103,17 @@ export async function getSource(
     }
 
     // Remove possible previous extraheader
+    // todo: should this be http.https://github.com/.extraheader instead ?
     let extraHeaderConfigKey = `http.${repositoryUrl}/.extraheader`;
     await removeGitConfig(git, extraHeaderConfigKey);
 
     // Add extraheader (auth)
-console.log(`************ AUTH = x-access-token:${accessToken}`);
     let base64Credentials = Buffer.from(`x-access-token:${accessToken}`, 'utf8').toString('base64');
     core.setSecret(base64Credentials);
+    await git.config('http.https://github.com/.extraheader', `AUTHORIZATION: basic asdf`);
     await git.config(extraHeaderConfigKey, `AUTHORIZATION: basic ${base64Credentials}`);
+    // await git.config('http.https://github.com/.extraheader', `AUTHORIZATION: basic asdf`);
 
-    // ?
-    // extraHeaderConfigKey = `http.https://github.com/.extraheader`;
-    // await removeGitConfig(git, extraHeaderConfigKey);
-    // await git.config(extraHeaderConfigKey, `AUTHORIZATION: basic ${base64Credentials}`);
 
     // LFS install
     if (lfs) {
