@@ -15,6 +15,7 @@ export interface IGitCommandManager {
     init(): Promise<void>;
     lfsFetch(ref: string): Promise<void>;
     lfsInstall(): Promise<void>;
+    log1(): Promise<void>;
     remoteAdd(remoteName: string, remoteUrl: string): Promise<void>;
     setWorkingDirectory(path: string): void;
     submoduleSync(recursive: boolean): Promise<void>;
@@ -99,7 +100,7 @@ class GitCommandManager {
         : Promise<void> {
 
         await this.execGit(['config', '--list']);
-        await this.execGit(['fetch']);
+        // await this.execGit(['fetch']);
 
         let args = ['-c', 'protocol.version=2', 'fetch', '--no-tags', '--prune', '--progress', '--no-recurse-submodules'];
         if (fetchDepth > 0) {
@@ -155,6 +156,10 @@ class GitCommandManager {
 
     public async lfsInstall() {
         await this.execGit(['lfs', 'install', '--local']);
+    }
+
+    public async log1() {
+        await this.execGit(['log', '-1']);
     }
 
     public async remoteAdd(

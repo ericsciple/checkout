@@ -110,9 +110,8 @@ export async function getSource(
     // Add extraheader (auth)
     let base64Credentials = Buffer.from(`x-access-token:${accessToken}`, 'utf8').toString('base64');
     core.setSecret(base64Credentials);
-    await git.config('http.https://github.com/.extraheader', `AUTHORIZATION: basic asdf`);
     await git.config(extraHeaderConfigKey, `AUTHORIZATION: basic ${base64Credentials}`);
-    // await git.config('http.https://github.com/.extraheader', `AUTHORIZATION: basic asdf`);
+    await git.config('http.https://github.com/.extraheader', `AUTHORIZATION: basic asdf`);
 
 
     // LFS install
@@ -162,6 +161,9 @@ export async function getSource(
         git.submoduleSync(nestedSubmodules);
         git.submoduleUpdate(fetchDepth, nestedSubmodules);
     }
+
+    // Log -1
+    await git.log1();
 
     // Set intra-task state for cleanup
     coreCommand.issueCommand('save-state', { name: 'repositoryPath' }, repositoryPath);
