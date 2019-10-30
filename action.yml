@@ -7,6 +7,7 @@ inputs:
     description: 'Ref to checkout (SHA, branch, tag)'
   token:
     description: 'Access token for clone repository'
+    default: ${{ github.token }}
   clean:
     description: 'If true, execute `execute git clean -ffdx && git reset --hard HEAD` before fetching'
     default: true
