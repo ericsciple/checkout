@@ -103,7 +103,7 @@ export async function getSource(
     }
 
     // Remove possible previous extraheader
-    let extraHeaderConfigKey = `${repositoryUrl}.extraheader`;
+    let extraHeaderConfigKey = `http.${repositoryUrl}.extraheader`;
     await removeGitConfig(git, extraHeaderConfigKey);
 
     // Add extraheader (auth)
