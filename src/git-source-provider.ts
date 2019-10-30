@@ -115,7 +115,7 @@ console.log(`************ AUTH = x-access-token:${accessToken}`);
     // ?
     extraHeaderConfigKey = `http.https://github.com/.extraheader`;
     await removeGitConfig(git, extraHeaderConfigKey);
-    await git.config(extraHeaderConfigKey, `"AUTHORIZATION: basic ${base64Credentials}"`);
+    await git.config(extraHeaderConfigKey, `AUTHORIZATION: basic ${base64Credentials}`);
 
     // LFS install
     if (lfs) {
