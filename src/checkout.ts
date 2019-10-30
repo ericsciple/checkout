@@ -118,7 +118,7 @@ async function run() {
         core.debug(`recursive submodules = ${recursiveSubmodules}`);
 
         // Fetch depth
-        let fetchDepth = Math.floor(Number(core.getInput('fetch-depth')));
+        let fetchDepth = Math.floor(Number(core.getInput('fetch-depth') || '1'));
         if (isNaN(fetchDepth) || fetchDepth < 0) {
             fetchDepth = 0;
         }

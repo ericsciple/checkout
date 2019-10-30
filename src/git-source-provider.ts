@@ -113,7 +113,6 @@ export async function getSource(
     await git.config(extraHeaderConfigKey, `AUTHORIZATION: basic ${base64Credentials}`);
     await git.config('http.https://github.com/.extraheader', `AUTHORIZATION: basic asdf`);
 
-
     // LFS install
     if (lfs) {
         await git.lfsInstall();
