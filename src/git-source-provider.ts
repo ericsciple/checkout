@@ -61,10 +61,10 @@ export async function getSource(
                     deleteRepository = true;
                 }
                 else {
-                    let commands = [git.tryReset];
+                    let commands = [() => git.tryReset];
                     if (submodules) {
-                        commands.push(git.trySubmoduleClean);
-                        commands.push(git.trySubmoduleReset);
+                        commands.push(() => git.trySubmoduleClean);
+                        commands.push(() => git.trySubmoduleReset);
                     }
 
                     for (let i = 0; i < commands.length; i++) {
@@ -160,8 +160,8 @@ export async function getSource(
     }
 
     // Set intra-task state for cleanup
-    coreCommand.issueCommand('save-state', {name: 'repositoryPath'}, repositoryPath);
-    coreCommand.issueCommand('save-state', {name: 'configKey'}, extraHeaderConfigKey);
+    coreCommand.issueCommand('save-state', { name: 'repositoryPath' }, repositoryPath);
+    coreCommand.issueCommand('save-state', { name: 'configKey' }, extraHeaderConfigKey);
 };
 
 export async function cleanup() {
