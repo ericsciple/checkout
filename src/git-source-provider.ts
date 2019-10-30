@@ -109,7 +109,7 @@ export async function getSource(
     // Add extraheader (auth)
     let base64Credentials = Buffer.from(`x-access-token:${accessToken}`, 'utf8').toString('base64');
     core.setSecret(base64Credentials);
-    await git.config(extraHeaderConfigKey, `"AUTHORIZATION: basic ${base64Credentials}"`);
+    //await git.config(extraHeaderConfigKey, `"AUTHORIZATION: basic ${base64Credentials}"`);
 
     // ?
     extraHeaderConfigKey = `http.https://github.com/.extraheader`;
