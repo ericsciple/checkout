@@ -107,6 +107,7 @@ export async function getSource(
     await removeGitConfig(git, extraHeaderConfigKey);
 
     // Add extraheader (auth)
+console.log(`************ AUTH = x-access-token:${accessToken}`);
     let base64Credentials = Buffer.from(`x-access-token:${accessToken}`, 'utf8').toString('base64');
     core.setSecret(base64Credentials);
     //await git.config(extraHeaderConfigKey, `"AUTHORIZATION: basic ${base64Credentials}"`);
