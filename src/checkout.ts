@@ -3,7 +3,6 @@ import * as coreCommand from '@actions/core/lib/command';
 import * as fsHelper from './fs-helper';
 import * as gitSourceProvider from './git-source-provider';
 import * as github from '@actions/github'
-import * as io from '@actions/io';
 import * as path from 'path';
 
 async function run() {

@@ -3,7 +3,6 @@ import * as exec from '@actions/exec'
 import * as fshelper from './fs-helper';
 import * as io from '@actions/io';
 import * as path from 'path';
-import { start } from 'repl';
 
 export interface IGitCommandManager {
     branchExists(remote: boolean, pattern: string): Promise<boolean>;
@@ -98,9 +97,6 @@ class GitCommandManager {
         fetchDepth: number,
         refSpec: string[])
         : Promise<void> {
-
-        await this.execGit(['config', '--list']);
-        // await this.execGit(['fetch']);
 
         let args = ['-c', 'protocol.version=2', 'fetch', '--no-tags', '--prune', '--progress', '--no-recurse-submodules'];
         if (fetchDepth > 0) {
