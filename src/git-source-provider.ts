@@ -279,7 +279,7 @@ async function getCheckoutInfo(
             result.ref = ref;
             result.startPoint = `refs/remotes/origin/${ref}`;
         }
-        else if (await git.tagExists(`refs/tags/${ref}`)) {
+        else if (await git.tagExists(`${ref}`)) {
             result.ref = `refs/tags/${ref}`;
         }
         else {
