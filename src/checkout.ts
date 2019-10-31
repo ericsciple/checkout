@@ -52,15 +52,15 @@ async function run() {
             }
             originalRepositoryPath = path.resolve(originalRepositoryPath);
             core.debug(`GITHUB_WORKSPACE = '${originalRepositoryPath}'`);
-            fsHelper.directoryExistsSync(originalRepositoryPath, true);
+            // todo: move the old dir? fsHelper.directoryExistsSync(originalRepositoryPath, true);
 
             // Move the repo path
             if ((process.platform != 'win32' && repositoryPath != originalRepositoryPath) ||
                 (process.platform == 'win32' && repositoryPath.toUpperCase() != originalRepositoryPath.toUpperCase())) {
 
-                // Move the directory
-                console.log(`Moving '${originalRepositoryPath}' to '${repositoryPath}'`);
-                io.mv(originalRepositoryPath, repositoryPath, { force: true });
+                // todo: move the old dir? // Move the directory
+                // console.log(`Moving '${originalRepositoryPath}' to '${repositoryPath}'`);
+                // io.mv(originalRepositoryPath, repositoryPath, { force: true });
 
                 // Update the context
                 coreCommand.issueCommand('set-workspace', {}, repositoryPath);
