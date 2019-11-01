@@ -12,9 +12,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v1 # todo: switch to v2
       - run: npm install
       - run: npm run build
-      #npm- run: npm run test
 
   test:
     runs-on: ubuntu-latest
