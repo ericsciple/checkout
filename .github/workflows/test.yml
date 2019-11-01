@@ -36,37 +36,38 @@ jobs:
           ref: test-data/v2/side-by-side-2
           path: side-by-side-2
       - name: Verify side by side
-        run: ./src/test/verify-side-by-side.sh
+        run: src/test/verify-side-by-side.sh
 
       # LFS
       - name: LFS checkout
         uses: ./
         with:
+          repository: ericsciple/testing # switch to actions/checkout, this must be hardcoded doesnt work in a fork
           ref: test-data/v2/lfs
           path: lfs
           lfs: true
-      - run: ./src/test/verify-lfs.sh
+      - run: src/test/verify-lfs.sh
 
       # Submodules false
       - name: Submodules false
         uses: ./
         with:
-          ref: test-data/v2/submodules-false
+          ref: test-data/v2/submodules
           path: submodules-false
-      - run: ./src/test/verify-submodules-false.sh
+      - run: src/test/verify-submodules-false.sh
 
       # Submodules one level
       - name: Submodules true
         uses: ./
         with:
-          ref: test-data/v2/submodules-true
+          ref: test-data/v2/submodules
           path: submodules-true
-      - run: ./src/test/verify-submodules-true.sh
+      - run: src/test/verify-submodules-true.sh
 
       # Submodules recursive
       - name: Submodules recursive
         uses: ./
         with:
-          ref: test-data/v2/submodules-recursive
+          ref: test-data/v2/submodules-nested
           path: submodules-recursive
-      - run: ./src/test/verify-submodules-recursive.sh
+      - run: src/test/verify-submodules-recursive.sh
