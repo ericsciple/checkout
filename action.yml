@@ -16,7 +16,8 @@ inputs:
   lfs:
     description: 'Whether to download Git-LFS files; defaults to false'
   fetch-depth:
-    description: 'The depth of commits to ask Git to fetch. Defaults to 1. Set to 0 to fetch'  
+    description: 'The depth of commits to ask Git to fetch. Defaults to 1. Set to 0 to fetch all history'
+    default: 1
   path:
     description: 'Optional path to check out source code'  
 runs:

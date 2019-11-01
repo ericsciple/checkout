@@ -16,7 +16,7 @@ export interface IGitCommandManager {
     lfsInstall(): Promise<void>;
     log1(): Promise<void>;
     remoteAdd(remoteName: string, remoteUrl: string): Promise<void>;
-    setWorkingDirectory(path: string): void;
+    // setWorkingDirectory(path: string): void;
     submoduleSync(recursive: boolean): Promise<void>;
     submoduleUpdate(fetchDepth: number, recursive: boolean): Promise<void>;
     tagExists(pattern: string): Promise<boolean>;
@@ -165,9 +165,9 @@ class GitCommandManager {
         await this.execGit(['remote', 'add', remoteName, remoteUrl]);
     }
 
-    public setWorkingDirectory(path: string) {
-        this.workingDirectory = path;
-    }
+    // public setWorkingDirectory(path: string) {
+    //     this.workingDirectory = path;
+    // }
 
     public async submoduleSync(recursive: boolean) {
         let args = ['submodule', 'sync'];
@@ -289,7 +289,8 @@ class GitCommandManager {
         workingDirectory: string,
         lfs: boolean) {
 
-        this.setWorkingDirectory(workingDirectory);
+        this.workingDirectory = workingDirectory;
+        // this.setWorkingDirectory(workingDirectory);
 
         // Git-lfs will try to pull down assets if any of the local/user/system setting exist.
         // If the user didn't enable `LFS` in their pipeline definition, disable LFS fetch/checkout.

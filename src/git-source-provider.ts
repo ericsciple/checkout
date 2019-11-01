@@ -7,7 +7,7 @@ import * as io from '@actions/io';
 import * as path from 'path';
 
 export async function getSource(
-    runnerWorkspacePath: string,
+    // runnerWorkspacePath: string,
     repositoryPath: string,
     repositoryOwner: string,
     repositoryName: string,
@@ -23,19 +23,32 @@ export async function getSource(
     core.info(`Syncing repository: ${repositoryOwner}/${repositoryName}`);
     let repositoryUrl = `https://github.com/${encodeURIComponent(repositoryOwner)}/${encodeURIComponent(repositoryName)}`;
 
-    let git = await gitCommandManager.CreateCommandManager(runnerWorkspacePath, lfs);
-    git.setWorkingDirectory(repositoryPath);
+    // Remove conflicting file path
+    if (fsHelper.fileExistsSync(repositoryPath)) {
+        await io.rmRF(repositoryPath);
+    }
 
-    // Repository exists
-    if (fsHelper.existsSync(repositoryPath)) {
+    // Create directory
+    let isNew = false;
+    if (!fsHelper.directoryExistsSync(repositoryPath)) {
+        isNew = true;
+        await io.mkdirP(repositoryPath);
+    }
 
-        let deleteRepository = false;
+    // Git command manager
+    core.info(`Working directory is '${repositoryPath}'`);
+    let git = await gitCommandManager.CreateCommandManager(repositoryPath, lfs);
+
+    // Existing directory
+    if (!isNew) {
+
+        let recreate = false;
 
         // Fetch URL does not match
         if (!fsHelper.directoryExistsSync(path.join(repositoryPath, '.git')) ||
             repositoryUrl != await git.tryGetFetchUrl()) {
 
-            deleteRepository = true;
+            recreate = true;
         }
         // Fetch URL matches
         else {
@@ -58,7 +71,7 @@ export async function getSource(
             if (clean) {
                 if (!(await git.tryClean())) {
                     core.debug(`The clean command failed. This might be caused by: 1) path too long, 2) permission issue, or 3) file in use. For futher investigation, manually run 'git clean -ffdx' on the directory '${repositoryPath}'.`);
-                    deleteRepository = true;
+                    recreate = true;
                 }
                 else {
                     let commands = [() => git.tryReset];
@@ -69,27 +82,25 @@ export async function getSource(
 
                     for (let i = 0; i < commands.length; i++) {
                         if (!(await commands[i]())) {
-                            deleteRepository = true;
+                            recreate = true;
                             break;
                         }
                     }
                 }
 
-                if (deleteRepository) {
+                if (recreate) {
                     core.warning(`Unable to clean or reset the repository. The repository will be recreated instead.`);
                 }
             }
         }
 
-        // Delete the repository
-        if (deleteRepository) {
+        // Recreate the directory
+        if (recreate) {
             await io.rmRF(repositoryPath);
+            await io.mkdirP(repositoryPath);
         }
     }
 
-    io.mkdirP(repositoryPath);
-
-    core.info(`Working directory is '${repositoryPath}'`);
 
     // Initialize the repository
     if (!fsHelper.directoryExistsSync(path.join(repositoryPath, '.git'))) {

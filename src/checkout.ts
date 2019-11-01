@@ -7,23 +7,32 @@ import * as path from 'path';
 
 async function run() {
     try {
-        // Runner workspace
-        let runnerWorkspacePath = process.env['RUNNER_WORKSPACE'];
-        if (!runnerWorkspacePath) {
-            throw new Error('RUNNER_WORKSPACE not defined');
+        // GitHub workspace
+        let githubWorkspacePath = process.env['GITHUB_WORKSPACE'];
+        if (!githubWorkspacePath) {
+            throw new Error('GITHUB_WORKSPACE not defined');
         }
-        runnerWorkspacePath = path.resolve(runnerWorkspacePath);
-        core.debug(`RUNNER_WORKSPACE = '${runnerWorkspacePath}'`);
-        fsHelper.directoryExistsSync(runnerWorkspacePath, true);
+        githubWorkspacePath = path.resolve(githubWorkspacePath);
+        core.debug(`GITHUB_WORKSPACE = '${githubWorkspacePath}'`);
+        fsHelper.directoryExistsSync(githubWorkspacePath, true);
 
-        // Temp
-        let tempPath = process.env['RUNNER_TEMP'];
-        if (!tempPath) {
-            throw new Error('RUNNER_TEMP not defined');
-        }
-        tempPath = path.resolve(tempPath);
-        core.debug(`RUNNER_TEMP = '${tempPath}'`);
-        fsHelper.directoryExistsSync(tempPath, true);
+        // // Runner workspace
+        // let runnerWorkspacePath = process.env['RUNNER_WORKSPACE'];
+        // if (!runnerWorkspacePath) {
+        //     throw new Error('RUNNER_WORKSPACE not defined');
+        // }
+        // runnerWorkspacePath = path.resolve(runnerWorkspacePath);
+        // core.debug(`RUNNER_WORKSPACE = '${runnerWorkspacePath}'`);
+        // fsHelper.directoryExistsSync(runnerWorkspacePath, true);
+
+        // // Temp
+        // let tempPath = process.env['RUNNER_TEMP'];
+        // if (!tempPath) {
+        //     throw new Error('RUNNER_TEMP not defined');
+        // }
+        // tempPath = path.resolve(tempPath);
+        // core.debug(`RUNNER_TEMP = '${tempPath}'`);
+        // fsHelper.directoryExistsSync(tempPath, true);
 
         // Qualified repository
         let qualifiedRepository = core.getInput('repository') || `${github.context.repo.owner}/${github.context.repo.repo}`;
@@ -33,50 +42,60 @@ async function run() {
             throw new Error(`Invalid repository '${qualifiedRepository}'. Expected format {owner}/{repo}.`);
         }
 
+        // Workflow repository?
+        let isWorkflowRepository = qualifiedRepository.toUpperCase() == `${github.context.repo.owner}/${github.context.repo.repo}`.toUpperCase();
+
         // Repository path
-        let repositoryPath = core.getInput('path') || splitRepository[1];
-        repositoryPath = path.resolve(runnerWorkspacePath, repositoryPath);
-        if (!repositoryPath.startsWith(path.resolve(runnerWorkspacePath).replace(/\\/g, '/') + path.sep)) {
-            throw new Error(`Repository path '${repositoryPath}' is not under '${runnerWorkspacePath}'`);
+        let repositoryPath = core.getInput('path') || (isWorkflowRepository ? '.' : splitRepository[1]);
+        repositoryPath = path.resolve(githubWorkspacePath, repositoryPath);
+        if (!(repositoryPath + path.sep).startsWith(githubWorkspacePath + path.sep)) {
+            throw new Error(`Repository path '${repositoryPath}' is not under '${githubWorkspacePath}'`);
         }
 
-        // Self repo?
-        let isSelfRepository = qualifiedRepository.toUpperCase() == `${github.context.repo.owner}/${github.context.repo.repo}`.toUpperCase();
-        if (isSelfRepository) {
+        // // Repository path
+        // let repositoryPath = core.getInput('path') || splitRepository[1];
+        // repositoryPath = path.resolve(runnerWorkspacePath, repositoryPath);
+        // if (!repositoryPath.startsWith(path.resolve(runnerWorkspacePath).replace(/\\/g, '/') + path.sep)) {
+        //     throw new Error(`Repository path '${repositoryPath}' is not under '${runnerWorkspacePath}'`);
+        // }
 
-            // Original repository path
-            let originalRepositoryPath = process.env['GITHUB_WORKSPACE'];
-            if (!originalRepositoryPath) {
-                throw new Error('GITHUB_WORKSPACE not defined');
-            }
-            originalRepositoryPath = path.resolve(originalRepositoryPath);
-            core.debug(`GITHUB_WORKSPACE = '${originalRepositoryPath}'`);
-            // todo: move the old dir? fsHelper.directoryExistsSync(originalRepositoryPath, true);
+        // // Self repo?
+        // let isSelfRepository = qualifiedRepository.toUpperCase() == `${github.context.repo.owner}/${github.context.repo.repo}`.toUpperCase();
+        // if (isSelfRepository) {
 
-            // Move the repo path
-            if ((process.platform != 'win32' && repositoryPath != originalRepositoryPath) ||
-                (process.platform == 'win32' && repositoryPath.toUpperCase() != originalRepositoryPath.toUpperCase())) {
+        //     // Original repository path
+        //     let originalRepositoryPath = process.env['GITHUB_WORKSPACE'];
+        //     if (!originalRepositoryPath) {
+        //         throw new Error('GITHUB_WORKSPACE not defined');
+        //     }
+        //     originalRepositoryPath = path.resolve(originalRepositoryPath);
+        //     core.debug(`GITHUB_WORKSPACE = '${originalRepositoryPath}'`);
+        //     // todo: move the old dir? fsHelper.directoryExistsSync(originalRepositoryPath, true);
 
-                // todo: move the old dir? // Move the directory
-                // console.log(`Moving '${originalRepositoryPath}' to '${repositoryPath}'`);
-                // io.mv(originalRepositoryPath, repositoryPath, { force: true });
+        //     // Move the repo path
+        //     if ((process.platform != 'win32' && repositoryPath != originalRepositoryPath) ||
+        //         (process.platform == 'win32' && repositoryPath.toUpperCase() != originalRepositoryPath.toUpperCase())) {
 
-                // Update the context
-                coreCommand.issueCommand('set-workspace', {}, repositoryPath);
-            }
-        }
+        //         // todo: move the old dir? // Move the directory
+        //         // console.log(`Moving '${originalRepositoryPath}' to '${repositoryPath}'`);
+        //         // io.mv(originalRepositoryPath, repositoryPath, { force: true });
+
+        //         // Update the context
+        //         coreCommand.issueCommand('set-workspace', {}, repositoryPath);
+        //     }
+        // }
 
         // Source branch, source version
         let sourceBranch: string;
         let sourceVersion: string;
         let ref = core.getInput('ref');
         if (!ref) {
-            if (isSelfRepository) {
+            if (isWorkflowRepository) {
                 sourceBranch = github.context.ref;
                 sourceVersion = github.context.sha;
             }
             else {
-                sourceBranch = 'master';
+                sourceBranch = 'refs/heads/master';
                 sourceVersion = '';
             }
         }
@@ -117,7 +136,7 @@ async function run() {
         core.debug(`recursive submodules = ${recursiveSubmodules}`);
 
         // Fetch depth
-        let fetchDepth = Math.floor(Number(core.getInput('fetch-depth') || '1'));
+        let fetchDepth = Math.floor(Number(core.getInput('fetch-depth')));
         if (isNaN(fetchDepth) || fetchDepth < 0) {
             fetchDepth = 0;
         }
@@ -139,7 +158,7 @@ async function run() {
 
             // Get sources
             await gitSourceProvider.getSource(
-                runnerWorkspacePath,
+                // githubWorkspacePath,
                 repositoryPath,
                 splitRepository[0], // repo owner
                 splitRepository[1], // repo name
