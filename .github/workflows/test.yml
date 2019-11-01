@@ -1,0 +1,71 @@
+name: Build and Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - 'releases/*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm install
+      - run: npm run build
+      #- run: npm run test
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Clone this repo
+      - name: Checkout
+        uses: actions/checkout@v1 # todo: switch to V2
+
+      # Side by side
+      - name: Side by side checkout 1
+        uses: ./
+        with:
+          ref: test-data/v2/side-by-side-1
+          path: side-by-side-1
+      - name: Side by side checkout 2
+        uses: ./
+        with:
+          ref: test-data/v2/side-by-side-2
+          path: side-by-side-2
+      - name: Verify side by side
+        run: ./src/test/verify-side-by-side.sh
+
+      # LFS
+      - name: LFS checkout
+        uses: ./
+        with:
+          ref: test-data/v2/lfs
+          path: lfs
+          lfs: true
+      - run: ./src/test/verify-lfs.sh
+
+      # Submodules false
+      - name: Submodules false
+        uses: ./
+        with:
+          ref: test-data/v2/submodules-false
+          path: submodules-false
+      - run: ./src/test/verify-submodules-false.sh
+
+      # Submodules one level
+      - name: Submodules true
+        uses: ./
+        with:
+          ref: test-data/v2/submodules-true
+          path: submodules-true
+      - run: ./src/test/verify-submodules-true.sh
+
+      # Submodules recursive
+      - name: Submodules recursive
+        uses: ./
+        with:
+          ref: test-data/v2/submodules-recursive
+          path: submodules-recursive
+      - run: ./src/test/verify-submodules-recursive.sh
