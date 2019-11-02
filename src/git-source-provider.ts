@@ -166,8 +166,8 @@ export async function getSource(
 
     // Submodules
     if (submodules) {
-        git.submoduleSync(nestedSubmodules);
-        git.submoduleUpdate(fetchDepth, nestedSubmodules);
+        await git.submoduleSync(nestedSubmodules);
+        await git.submoduleUpdate(fetchDepth, nestedSubmodules);
     }
 
     // Dump some info about the checked out commit
