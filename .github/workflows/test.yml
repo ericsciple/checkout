@@ -64,6 +64,7 @@ jobs:
         with:
           ref: test-data/v2/submodule
           path: submodules-true
+          submodules: true
       - name: Verify submodules true
         run: src/test/verify-submodules-true.sh
 
@@ -73,5 +74,6 @@ jobs:
         with:
           ref: test-data/v2/submodule
           path: submodules-recursive
+          submodules: recursive
       - name: Verify submodules recursive
         run: src/test/verify-submodules-recursive.sh
