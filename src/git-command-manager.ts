@@ -182,7 +182,7 @@ class GitCommandManager {
         fetchDepth: number,
         recursive: boolean) {
 
-        let args = ['submodule', 'update', '--init', '--force'];
+        let args = ['-c', 'protocol.version=2', 'submodule', 'update', '--init', '--force'];
         if (fetchDepth > 0) {
             args.push(`--depth=${fetchDepth}`);
         }
