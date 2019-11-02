@@ -53,7 +53,7 @@ jobs:
       - name: Submodules false
         uses: ./
         with:
-          ref: test-data/v2/submodules
+          ref: test-data/v2/submodule
           path: submodules-false
       - name: Verify submodules false
         run: src/test/verify-submodules-false.sh
@@ -62,7 +62,7 @@ jobs:
       - name: Submodules true
         uses: ./
         with:
-          ref: test-data/v2/submodules
+          ref: test-data/v2/submodule
           path: submodules-true
       - name: Verify submodules true
         run: src/test/verify-submodules-true.sh
@@ -71,7 +71,7 @@ jobs:
       - name: Submodules recursive
         uses: ./
         with:
-          ref: test-data/v2/submodules-nested
+          ref: test-data/v2/submodule
           path: submodules-recursive
       - name: Verify submodules recursive
         run: src/test/verify-submodules-recursive.sh

@@ -5,7 +5,7 @@ if [ ! -f "./submodules-false/regular-file.txt" ]; then
     exit 1
 fi
 
-if [ -f "./submodules-false/submodule-file.txt" ]; then
+if [ -f "./submodules-false/submodule-level-1/submodule-file.txt" ]; then
     echo "Unexpected submodule file exists"
     exit 1
 fi
