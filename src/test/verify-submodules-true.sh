@@ -11,6 +11,6 @@ if [ ! -f "./submodules-true/submodule-level-1/submodule-file.txt" ]; then
 fi
 
 if [ -f "./submodules-true/submodule-level-1/submodule-level-2/nested-submodule-file.txt" ]; then
-    echo "Unexpected submodule file exists"
+    echo "Unexpected nested submodule file exists"
     exit 1
 fi
