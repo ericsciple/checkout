@@ -312,12 +312,15 @@ class GitCommandManager {
                 gitVersion = new Version(match[0]);
             }
         }
-        if (!gitVersion.isSet) {
+        if (!gitVersion.isValid()) {
             throw new Error("Unable to determine git version");
         }
 
         // Minimum git version
-        let minimumGitVersion = new Version("2.9"); // Auth header not supported before 2.9
+        // Note:
+        // - Auth header not supported before 2.9
+        // - Wire protocol v2 not supported before 2.18
+        let minimumGitVersion = new Version("2.18");
         if (!gitVersion.checkMinimum(minimumGitVersion)) {
             throw new Error(`Minimum required git version is ${minimumGitVersion}. Your git ('${this.gitPath}') is ${gitVersion}`);
         }
@@ -335,12 +338,14 @@ class GitCommandManager {
                     gitLfsVersion = new Version(match[0]);
                 }
             }
-            if (!gitLfsVersion.isSet) {
+            if (!gitLfsVersion.isValid()) {
                 throw new Error("Unable to determine git-lfs version");
             }
 
             // Minimum git-lfs version
-            let minimumGitLfsVersion = new Version("2.1"); // Auth header not supported before 2.1
+            // Note:
+            // - Auth header not supported before 2.1
+            let minimumGitLfsVersion = new Version("2.1");
             if (!gitLfsVersion.checkMinimum(minimumGitLfsVersion)) {
                 throw new Error(`Minimum required git-lfs version is ${minimumGitLfsVersion}. Your git-lfs ('${gitLfsPath}') is ${gitLfsVersion}`);
             }
@@ -373,11 +378,9 @@ class GitOutput {
 }
 
 class Version {
-    public readonly isSet: boolean = false;
-    private readonly major: number = 0;
-    private readonly minor: number = 0;
-    private readonly patch: number = 0;
-    private readonly isPatchSet: boolean = false;
+    private readonly major: number = NaN;
+    private readonly minor: number = NaN;
+    private readonly patch: number = NaN;
 
     constructor(version?: string) {
         if (version) {
@@ -385,18 +388,16 @@ class Version {
             if (match) {
                 this.major = Number(match[1]);
                 this.minor = Number(match[2]);
-                this.isSet = true;
                 if (match[4]) {
                     this.patch = Number(match[4]);
-                    this.isPatchSet = true;
                 }
             }
         }
     }
 
     public checkMinimum(minimum: Version): boolean {
-        if (!minimum.isSet) {
-            throw new Error("Arg minimum is not set");
+        if (!minimum.isValid()) {
+            throw new Error("Arg minimum is not a valid version");
         }
 
         // Major is insufficient
@@ -416,7 +417,7 @@ class Version {
             if (this.minor == minimum.minor) {
 
                 // Patch is insufficient
-                if (this.patch < minimum.patch) {
+                if (this.patch && this.patch < (minimum.patch || 0)) {
                     return false;
                 }
             }
@@ -425,11 +426,15 @@ class Version {
         return true;
     }
 
+    public isValid(): boolean {
+        return !isNaN(this.major);
+    }
+
     public toString(): string {
         let result = '';
-        if (this.isSet) {
+        if (this.isValid()) {
             result = `${this.major}.${this.minor}`;
-            if (this.isPatchSet) {
+            if (!isNaN(this.patch)) {
                 result += `.${this.patch}`;
             }
         }
