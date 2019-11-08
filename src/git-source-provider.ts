@@ -6,6 +6,8 @@ import * as gitCommandManager from './git-command-manager';
 import * as io from '@actions/io';
 import * as path from 'path';
 
+let authConfigKey = `http.https://github.com/.extraheader`;
+
 export async function getSource(
     // runnerWorkspacePath: string,
     repositoryPath: string,
@@ -114,13 +116,13 @@ export async function getSource(
     }
 
     // Remove possible previous extraheader
-    let extraHeaderConfigKey = `http.https://github.com/.extraheader`;
-    await removeGitConfig(git, extraHeaderConfigKey);
+    await removeGitConfig(git, authConfigKey);
 
     // Add extraheader (auth)
     let base64Credentials = Buffer.from(`x-access-token:${accessToken}`, 'utf8').toString('base64');
     core.setSecret(base64Credentials);
-    await git.config(extraHeaderConfigKey, `AUTHORIZATION: basic ${base64Credentials}`);
+    let authConfigValue = `AUTHORIZATION: basic ${base64Credentials}`;
+    await git.config(authConfigKey, authConfigValue);
 
     // LFS install
     if (lfs) {
@@ -167,7 +169,9 @@ export async function getSource(
     // Submodules
     if (submodules) {
         await git.submoduleSync(nestedSubmodules);
-        await git.submoduleUpdate(fetchDepth, nestedSubmodules);
+        let config: { [key: string]: string } = {};
+        config[authConfigKey] = authConfigValue;
+        await git.submoduleUpdate(fetchDepth, nestedSubmodules, config);
     }
 
     // Dump some info about the checked out commit
@@ -175,7 +179,7 @@ export async function getSource(
 
     // Set intra-task state for cleanup
     coreCommand.issueCommand('save-state', { name: 'repositoryPath' }, repositoryPath);
-    coreCommand.issueCommand('save-state', { name: 'configKey' }, extraHeaderConfigKey);
+    coreCommand.issueCommand('save-state', { name: 'configKey' }, authConfigKey);
 };
 
 export async function cleanup() {

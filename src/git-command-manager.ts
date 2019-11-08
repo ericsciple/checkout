@@ -18,7 +18,7 @@ export interface IGitCommandManager {
     remoteAdd(remoteName: string, remoteUrl: string): Promise<void>;
     // setWorkingDirectory(path: string): void;
     submoduleSync(recursive: boolean): Promise<void>;
-    submoduleUpdate(fetchDepth: number, recursive: boolean): Promise<void>;
+    submoduleUpdate(fetchDepth: number, recursive: boolean, config: { [key: string]: string }): Promise<void>;
     tagExists(pattern: string): Promise<boolean>;
     tryClean(): Promise<boolean>;
     tryConfigUnset(configKey: string): Promise<boolean>;
@@ -180,9 +180,12 @@ class GitCommandManager {
 
     public async submoduleUpdate(
         fetchDepth: number,
-        recursive: boolean) {
+        recursive: boolean,
+        config: { [key: string]: string }) {
 
-        let args = ['-c', 'protocol.version=2', 'submodule', 'update', '--init', '--force'];
+        let args = ['-c', 'protocol.version=2'];
+        Object.keys(config || {}).forEach(key => args.push('-c', `${key}=${config[key]}`))
+        args.push('submodule', 'update', '--init', '--force');
         if (fetchDepth > 0) {
             args.push(`--depth=${fetchDepth}`);
         }
