@@ -16,8 +16,8 @@ export async function getSource(
     ref: string,
     commit: string,
     clean: boolean,
-    submodules: boolean,
-    nestedSubmodules: boolean,
+    // submodules: boolean,
+    // nestedSubmodules: boolean,
     fetchDepth: number,
     lfs: boolean,
     accessToken: string) {
@@ -75,20 +75,23 @@ export async function getSource(
                     core.debug(`The clean command failed. This might be caused by: 1) path too long, 2) permission issue, or 3) file in use. For futher investigation, manually run 'git clean -ffdx' on the directory '${repositoryPath}'.`);
                     recreate = true;
                 }
-                else {
-                    let commands = [() => git.tryReset];
-                    if (submodules) {
-                        commands.push(() => git.trySubmoduleClean);
-                        commands.push(() => git.trySubmoduleReset);
-                    }
-
-                    for (let i = 0; i < commands.length; i++) {
-                        if (!(await commands[i]())) {
-                            recreate = true;
-                            break;
-                        }
-                    }
+                else if (await git.tryReset()) {
+                    recreate = true;
                 }
+                // else {
+                //     let commands = [() => git.tryReset];
+                //     if (submodules) {
+                //         commands.push(() => git.trySubmoduleClean);
+                //         commands.push(() => git.trySubmoduleReset);
+                //     }
+
+                //     for (let i = 0; i < commands.length; i++) {
+                //         if (!(await commands[i]())) {
+                //             recreate = true;
+                //             break;
+                //         }
+                //     }
+                // }
 
                 if (recreate) {
                     core.warning(`Unable to clean or reset the repository. The repository will be recreated instead.`);
@@ -166,13 +169,13 @@ export async function getSource(
     //     throw err;
     // }
 
-    // Submodules
-    if (submodules) {
-        await git.submoduleSync(nestedSubmodules);
-        let config: { [key: string]: string } = {};
-        config[authConfigKey] = authConfigValue;
-        await git.submoduleUpdate(fetchDepth, nestedSubmodules, config);
-    }
+    // // Submodules
+    // if (submodules) {
+    //     await git.submoduleSync(nestedSubmodules);
+    //     let config: { [key: string]: string } = {};
+    //     config[authConfigKey] = authConfigValue;
+    //     await git.submoduleUpdate(fetchDepth, nestedSubmodules, config);
+    // }
 
     // Dump some info about the checked out commit
     await git.log1();

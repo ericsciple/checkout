@@ -17,16 +17,16 @@ export interface IGitCommandManager {
     log1(): Promise<void>;
     remoteAdd(remoteName: string, remoteUrl: string): Promise<void>;
     // setWorkingDirectory(path: string): void;
-    submoduleSync(recursive: boolean): Promise<void>;
-    submoduleUpdate(fetchDepth: number, recursive: boolean, config: { [key: string]: string }): Promise<void>;
+    // submoduleSync(recursive: boolean): Promise<void>;
+    // submoduleUpdate(fetchDepth: number, recursive: boolean, config: { [key: string]: string }): Promise<void>;
     tagExists(pattern: string): Promise<boolean>;
     tryClean(): Promise<boolean>;
     tryConfigUnset(configKey: string): Promise<boolean>;
     tryDisableAutomaticGarbageCollection(): Promise<boolean>;
     tryGetFetchUrl(): Promise<string>;
     tryReset(): Promise<boolean>;
-    trySubmoduleClean(): Promise<boolean>;
-    trySubmoduleReset(): Promise<boolean>;
+    // trySubmoduleClean(): Promise<boolean>;
+    // trySubmoduleReset(): Promise<boolean>;
 }
 
 export async function CreateCommandManager(
@@ -169,33 +169,33 @@ class GitCommandManager {
     //     this.workingDirectory = path;
     // }
 
-    public async submoduleSync(recursive: boolean) {
-        let args = ['submodule', 'sync'];
-        if (recursive) {
-            args.push('--recursive');
-        }
+    // public async submoduleSync(recursive: boolean) {
+    //     let args = ['submodule', 'sync'];
+    //     if (recursive) {
+    //         args.push('--recursive');
+    //     }
 
-        await this.execGit(args);
-    }
+    //     await this.execGit(args);
+    // }
 
-    public async submoduleUpdate(
-        fetchDepth: number,
-        recursive: boolean,
-        config: { [key: string]: string }) {
+    // public async submoduleUpdate(
+    //     fetchDepth: number,
+    //     recursive: boolean,
+    //     config: { [key: string]: string }) {
 
-        let args = ['-c', 'protocol.version=2'];
-        Object.keys(config || {}).forEach(key => args.push('-c', `${key}=${config[key]}`))
-        args.push('submodule', 'update', '--init', '--force');
-        if (fetchDepth > 0) {
-            args.push(`--depth=${fetchDepth}`);
-        }
+    //     let args = ['-c', 'protocol.version=2'];
+    //     Object.keys(config || {}).forEach(key => args.push('-c', `${key}=${config[key]}`))
+    //     args.push('submodule', 'update', '--init', '--force');
+    //     if (fetchDepth > 0) {
+    //         args.push(`--depth=${fetchDepth}`);
+    //     }
 
-        if (recursive) {
-            args.push('--recursive');
-        }
+    //     if (recursive) {
+    //         args.push('--recursive');
+    //     }
 
-        await this.execGit(args);
-    }
+    //     await this.execGit(args);
+    // }
 
     public async tagExists(pattern: string): Promise<boolean> {
         let output = await this.execGit(['tag', '--list', pattern]);
@@ -237,15 +237,15 @@ class GitCommandManager {
         return output.exitCode == 0;
     }
 
-    public async trySubmoduleClean(): Promise<boolean> {
-        let output = await this.execGit(['submodule', 'foreach', 'git', 'clean', '-ffdx'], true);
-        return output.exitCode == 0;
-    }
+    // public async trySubmoduleClean(): Promise<boolean> {
+    //     let output = await this.execGit(['submodule', 'foreach', 'git', 'clean', '-ffdx'], true);
+    //     return output.exitCode == 0;
+    // }
 
-    public async trySubmoduleReset(): Promise<boolean> {
-        let output = await this.execGit(['submodule', 'foreach', 'git', 'reset', '--hard', 'HEAD'], true);
-        return output.exitCode == 0;
-    }
+    // public async trySubmoduleReset(): Promise<boolean> {
+    //     let output = await this.execGit(['submodule', 'foreach', 'git', 'reset', '--hard', 'HEAD'], true);
+    //     return output.exitCode == 0;
+    // }
 
     public static async createCommandManager(
         workingDirectory: string,

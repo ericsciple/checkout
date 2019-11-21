@@ -42,11 +42,8 @@ async function run() {
             throw new Error(`Invalid repository '${qualifiedRepository}'. Expected format {owner}/{repo}.`);
         }
 
-        // Workflow repository?
-        let isWorkflowRepository = qualifiedRepository.toUpperCase() == `${github.context.repo.owner}/${github.context.repo.repo}`.toUpperCase();
-
         // Repository path
-        let repositoryPath = core.getInput('path') || (isWorkflowRepository ? '.' : splitRepository[1]);
+        let repositoryPath = core.getInput('path') || '.';
         repositoryPath = path.resolve(githubWorkspacePath, repositoryPath);
         if (!(repositoryPath + path.sep).startsWith(githubWorkspacePath + path.sep)) {
             throw new Error(`Repository path '${repositoryPath}' is not under '${githubWorkspacePath}'`);
@@ -85,6 +82,9 @@ async function run() {
         //     }
         // }
 
+        // Workflow repository?
+        let isWorkflowRepository = qualifiedRepository.toUpperCase() == `${github.context.repo.owner}/${github.context.repo.repo}`.toUpperCase();
+
         // Source branch, source version
         let sourceBranch: string;
         let sourceVersion: string;
@@ -122,18 +122,21 @@ async function run() {
         core.debug(`clean = ${clean}`);
 
         // Submodules
-        let submodules = false;
-        let recursiveSubmodules = false;
-        let submodulesString = (core.getInput('submodules') || '').toUpperCase();
-        if (submodulesString == 'RECURSIVE') {
-            submodules = true;
-            recursiveSubmodules = true;
+        if (core.getInput('submodules')) {
+            throw new Error("The input 'submodules' is not currently supported yet in actions/checkout@v2")
         }
-        else if (submodulesString == 'TRUE') {
-            submodules = true;
-        }
-        core.debug(`submodules = ${submodules}`);
-        core.debug(`recursive submodules = ${recursiveSubmodules}`);
+        // let submodules = false;
+        // let recursiveSubmodules = false;
+        // let submodulesString = (core.getInput('submodules') || '').toUpperCase();
+        // if (submodulesString == 'RECURSIVE') {
+        //     submodules = true;
+        //     recursiveSubmodules = true;
+        // }
+        // else if (submodulesString == 'TRUE') {
+        //     submodules = true;
+        // }
+        // core.debug(`submodules = ${submodules}`);
+        // core.debug(`recursive submodules = ${recursiveSubmodules}`);
 
         // Fetch depth
         let fetchDepth = Math.floor(Number(core.getInput('fetch-depth')));
@@ -165,8 +168,8 @@ async function run() {
                 sourceBranch,
                 sourceVersion,
                 clean,
-                submodules,
-                recursiveSubmodules,
+                // submodules,
+                // recursiveSubmodules,
                 fetchDepth,
                 lfs,
                 accessToken);
