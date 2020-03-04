@@ -1,0 +1,1 @@
+{"url": "https://httpbin.org/stream/3", "args": {}, "headers": {"Host": "httpbin.org", "X-Amzn-Trace-Id": "Root=1-5e60327d-424736a82eee91f482bed568", "User-Agent": "actions/tool-cache"}, "origin": "75.177.157.79", "id": 0}
