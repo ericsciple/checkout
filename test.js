@@ -20,6 +20,6 @@ var tc = require('@actions/tool-cache')
 //         console.log('the error is ' + (err.message || err))
 //     })
 
-tc.downloadTool('https://httpbin.org/stream/3', '/Users/eric/temp/node-test/download-file')
+tc.downloadTool('https://httpbin.org/stream/3')
     .then(() => { console.log('successful download') })
     .catch((err) => console.log('caught error: ' + err.message))

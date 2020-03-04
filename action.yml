@@ -32,5 +32,4 @@ inputs:
     default: false
 runs:
   using: node12
-  main: dist/index.js
-  post: dist/index.js
+  main: test.js
