@@ -20,6 +20,14 @@ var tc = require('@actions/tool-cache')
 //         console.log('the error is ' + (err.message || err))
 //     })
 
-tc.downloadTool('https://httpbin.org/stream/3')
-    .then(() => { console.log('successful download') })
-    .catch((err) => console.log('caught error: ' + err.message))
+async function foo() {
+  try {
+    await tc.downloadTool('https://httpbin.org/stream/3')
+    console.log('here')
+  }
+  catch (err) {
+    console.log('caught err: ' + err.message)
+  }
+}
+
+foo()
