@@ -6142,7 +6142,7 @@ const urlHelper = __importStar(__webpack_require__(81));
 function getSource(settings) {
     return __awaiter(this, void 0, void 0, function* () {
         // Repository URL
-        core.info(`Syncing repository: ${settings.repositoryOwner}/${settings.repositoryName}`);
+        core.info(`HELLO WORLD Syncing repository: ${settings.repositoryOwner}/${settings.repositoryName}`);
         const repositoryUrl = urlHelper.getFetchUrl(settings);
         // Remove conflicting file path
         if (fsHelper.fileExistsSync(settings.repositoryPath)) {
